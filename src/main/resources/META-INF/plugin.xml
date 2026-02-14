@@ -32,6 +32,8 @@
         <internalFileTemplate name="StatelessComponent.dart"/>
         <internalFileTemplate name="StatefulComponent.dart"/>
         <internalFileTemplate name="InheritedComponent.dart"/>
+        <newProjectWizard.generator
+                implementation="com.github.eladrimonos.jasprintellij.template.project.JasprNewProjectWizard"/>
     </extensions>
 
     <actions>
