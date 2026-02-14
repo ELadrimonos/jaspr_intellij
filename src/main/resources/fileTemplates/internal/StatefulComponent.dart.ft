@@ -1,0 +1,19 @@
+import 'package:jaspr/dom.dart';
+import 'package:jaspr/jaspr.dart';
+import 'package:jaspr_content/theme.dart';
+
+class ${NAME} extends StatefulComponent {
+  const ${NAME}({super.key});
+
+  @override
+  State<${NAME}> createState() => ${NAME}State();
+}
+
+class ${NAME}State extends State<${NAME}> {
+
+  @override
+  Component build(BuildContext context) {
+    return div([]);
+  }
+}
+

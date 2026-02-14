@@ -13,8 +13,9 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.eladrimonos.jasprintellij.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.MyProjectActivity" />
+        <toolWindow factoryClass="com.github.eladrimonos.jasprintellij.toolWindow.MyToolWindowFactory"
+                    id="MyToolWindow"/>
+        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.MyProjectActivity"/>
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
                 contextId="JASPR_TOPLEVEL"
@@ -28,5 +29,19 @@
                 contextId="JASPR_ANYWHERE"
                 implementation="com.github.eladrimonos.jasprintellij.template.JasprAnywhereTemplateContextType"
         />
+        <internalFileTemplate name="StatelessComponent.dart"/>
+        <internalFileTemplate name="StatefulComponent.dart"/>
+        <internalFileTemplate name="InheritedComponent.dart"/>
     </extensions>
+
+    <actions>
+        <action
+                id="New.JasprFile"
+                class="com.github.eladrimonos.jasprintellij.template.file.NewJasprFileAction"
+        >
+            <add-to-group group-id="NewGroup"
+                          anchor="after"
+                          relative-to-action="Dart.NewDartFile"/>
+        </action>
+    </actions>
 </idea-plugin>
