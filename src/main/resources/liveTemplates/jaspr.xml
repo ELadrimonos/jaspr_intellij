@@ -20,7 +20,7 @@
             <option name="JASPR_TOPLEVEL" value="true" />
         </context>
     </template>
-    <template name="jhtml" value="([$CONTENT$])," description=" nsert a html component" toReformat="false" toShortenFQNames="true">
+    <template name="jhtml" value="([$CONTENT$])," description="Insert a html component" toReformat="false" toShortenFQNames="true">
         <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
         <context>
             <option name="JASPR_STATEMENT" value="true"/>
