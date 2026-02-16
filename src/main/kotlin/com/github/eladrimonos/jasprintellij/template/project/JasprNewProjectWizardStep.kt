@@ -1,34 +1,26 @@
 package com.github.eladrimonos.jasprintellij.template.project
 
-import com.intellij.execution.configurations.GeneralCommandLine
-import com.intellij.execution.process.ProcessOutput
-import com.intellij.execution.util.ExecUtil
+import com.github.eladrimonos.jasprintellij.services.JasprProjectCreator
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProgressManager
-import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
-import com.intellij.util.EnvironmentUtil
 import com.jetbrains.lang.dart.sdk.DartSdkLibUtil
 import com.jetbrains.lang.dart.sdk.DartSdkUtil
 import java.io.File
-import java.nio.charset.StandardCharsets
 import javax.swing.JComboBox
 
 class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
-
-    private val logger = Logger.getInstance(JasprNewProjectWizardStep::class.java)
 
     private var sdkPath: String = ""
     private var template: String? = null
@@ -39,6 +31,8 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
     private var runPubGet: Boolean = true
 
     private var backendComboRef: JComboBox<String>? = null
+
+    private val projectCreator: JasprProjectCreator = JasprProjectCreator()
 
     init {
         // Attempt to reuse the last configured Dart SDK or auto-detect it from PATH.
@@ -62,7 +56,7 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
                     .validationOnInput { field ->
                         if (field.text.isBlank()) return@validationOnInput error("Path required")
                         if (!DartSdkUtil.isDartSdkHome(field.text)) {
-                            return@validationOnInput error("Invalid Dart SDK path. Must contain bin/dart")
+                            return@validationOnInput error("Invalid Dart SDK path. Must contain bin/dart. If you're using Flutter, you can use flutter/bin/cache/dart-sdk")
                         }
                         null
                     }
@@ -149,7 +143,29 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
 
         ProgressManager.getInstance().runProcessWithProgressSynchronously(
             {
-                executeJasprCreate(project)
+                val projectPath = project.basePath ?: throw ConfigurationException("Project path not found")
+                val projectDir = File(projectPath)
+
+                projectCreator.preflightCheck(sdkPath)
+
+                projectCreator.create(
+                    projectDir = projectDir,
+                    sdkPath = sdkPath,
+                    options = JasprProjectCreator.Options(
+                        template = template,
+                        mode = mode,
+                        routing = routing,
+                        flutter = flutter,
+                        backend = backend,
+                        runPubGet = runPubGet,
+                    )
+                )
+
+                ApplicationManager.getApplication().invokeLater {
+                    LocalFileSystem.getInstance()
+                        .refreshAndFindFileByIoFile(projectDir)
+                        ?.refresh(false, true)
+                }
             },
             "Creating Jaspr Project...",
             false,
@@ -158,99 +174,12 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
     }
 
     /**
-     * Executes the Jaspr CLI in a temporary directory and then moves
-     * the generated project into the final project location.
-     */
-    private fun executeJasprCreate(project: Project) {
-        val projectPath = project.basePath ?: throw ConfigurationException("Project path not found")
-        val projectDir = File(projectPath)
-        val parentDir = projectDir.parentFile
-        val projectName = projectDir.name
-
-        val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
-        val dartExecutable = File(sdkPath, "bin/$dartExeName").absolutePath
-
-        val tempDir = File(parentDir, "${projectName}_temp_${System.currentTimeMillis()}")
-        val tempProjectName = tempDir.name
-
-        try {
-            val commandLine = GeneralCommandLine()
-                .withExePath(dartExecutable)
-                .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "create")
-                .withWorkDirectory(parentDir)
-                .withCharset(StandardCharsets.UTF_8)
-                .withEnvironment(EnvironmentUtil.getEnvironmentMap())
-
-            template?.let { commandLine.addParameters("-t", it) }
-            commandLine.addParameters("-m", mode)
-            commandLine.addParameters("-r", routing)
-            commandLine.addParameters("-f", flutter)
-            if (mode == "server" && backend != "none") commandLine.addParameters("-b", backend)
-            if (!runPubGet) commandLine.addParameter("--no-pub-get")
-
-            commandLine.addParameter(tempProjectName)
-
-            val output: ProcessOutput = ExecUtil.execAndGetOutput(commandLine)
-
-            if (output.exitCode != 0) {
-                throw ConfigurationException("Error running Jaspr CLI: ${output.stderr}\n${output.stdout}")
-            }
-
-            tempDir.listFiles()?.forEach { file ->
-                val targetFile = File(projectDir, file.name)
-                if (file.isDirectory) {
-                    file.copyRecursively(targetFile, overwrite = true)
-                } else {
-                    file.copyTo(targetFile, overwrite = true)
-                }
-            }
-
-            replaceProjectNameInFiles(projectDir, tempProjectName, projectName)
-
-            tempDir.deleteRecursively()
-
-            ApplicationManager.getApplication().invokeLater {
-                LocalFileSystem.getInstance()
-                    .refreshAndFindFileByIoFile(projectDir)
-                    ?.refresh(false, true)
-            }
-
-        } catch (e: Exception) {
-            if (tempDir.exists()) {
-                tempDir.deleteRecursively()
-            }
-            throw ConfigurationException("Unexpected error: ${e.message}")
-        }
-    }
-
-    private fun replaceProjectNameInFiles(projectDir: File, oldName: String, newName: String) {
-        val filesToUpdate = listOf(
-            "pubspec.yaml",
-            "README.md",
-            "analysis_options.yaml"
-        )
-
-        filesToUpdate.forEach { fileName ->
-            val file = File(projectDir, fileName)
-            if (file.exists()) {
-                try {
-                    val content = file.readText(StandardCharsets.UTF_8)
-                    val updatedContent = content.replace(oldName, newName)
-                    file.writeText(updatedContent, StandardCharsets.UTF_8)
-                } catch (e: Exception) {
-                    logger.warn("Could not update project name in $fileName: ${e.message}")
-                }
-            }
-        }
-    }
-
-    /**
      * Attempts to locate a Dart SDK by scanning the system PATH
      * and validating potential SDK home directories.
      */
     private fun findDartInPath(): String? {
-        val envPath = EnvironmentUtil.getValue("PATH") ?: return null
-        val exeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
+        val envPath = com.intellij.util.EnvironmentUtil.getValue("PATH") ?: return null
+        val exeName = if (com.intellij.openapi.util.SystemInfo.isWindows) "dart.exe" else "dart"
 
         for (pathDir in envPath.split(File.pathSeparator)) {
             val file = File(pathDir, exeName)
