@@ -1,0 +1,18 @@
+import 'package:jaspr/dom.dart';
+import 'package:jaspr/jaspr.dart';
+import 'package:jaspr_content/theme.dart';
+
+class ${NAME} extends InheritedComponent {
+    const ${NAME}({required super.child, super.key}) ;
+
+    static ${NAME} of(BuildContext context) {
+        final ${NAME}? result = context.dependOnInheritedComponentOfExactType<${NAME}>();
+        assert(result != null, 'No ${NAME} found in context');
+        return result!;
+    }
+
+    @override
+    bool updateShouldNotify(covariant ${NAME} oldComponent) {
+        return false;
+    }
+}

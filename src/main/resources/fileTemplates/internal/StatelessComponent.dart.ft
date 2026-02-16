@@ -1,0 +1,13 @@
+import 'package:jaspr/dom.dart';
+import 'package:jaspr/jaspr.dart';
+import 'package:jaspr_content/theme.dart';
+
+class ${NAME} extends StatelessComponent {
+  const ${NAME}({super.key});
+
+  @override
+  Component build(BuildContext context) {
+    return div([]);
+  }
+}
+

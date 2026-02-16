@@ -1,0 +1,60 @@
+<!--suppress LiveTemplateI18n -->
+<templateSet group="Jaspr">
+    <template name="stlessc" value="class $NAME$ extends StatelessComponent {&#10;  const $NAME$({super.key});&#10;&#10;  @override&#10;  Component build(BuildContext context) {&#10;    return const div([$END$]);&#10;  }&#10;}&#10;" description="New Stateless component" toReformat="false" toShortenFQNames="true">
+        <variable name="NAME" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_TOPLEVEL" value="true" />
+        </context>
+    </template>
+    <template name="stfulc" value="class $NAME$ extends StatefulComponent {&#10;  const $NAME$({super.key});&#10;&#10;  @override&#10;  State&lt;$NAME$&gt; createState() =&gt; $SNAME$();&#10;}&#10;&#10;class $SNAME$ extends State&lt;$NAME$&gt; {&#10;  @override&#10;  Component build(BuildContext context) {&#10;    return const div([$END$]);&#10;  }&#10;}&#10;" description="New Stateful component" toReformat="false" toShortenFQNames="true">
+        <variable name="NAME" expression="" defaultValue="" alwaysStopAt="true" />
+        <variable name="SNAME" expression="regularExpression(concat(&quot;_&quot;, NAME, &quot;State&quot;), &quot;^__&quot;, &quot;_&quot;)" defaultValue="" alwaysStopAt="false" />
+        <context>
+            <option name="JASPR_TOPLEVEL" value="true" />
+        </context>
+    </template>
+    <template name="inhc" value="class $NAME$ extends InheritedComponent {&#10;  const $NAME$({&#10;    super.key,&#10;    required Component child,&#10;  }) : super(child: child);&#10;&#10;  static $NAME$ of(BuildContext context) {&#10;    final $NAME$? result = context.dependOnInheritedComponentOfExactType&lt;$NAME$&gt;();&#10;    assert(result != null, 'No $NAME$ found in context');&#10;    return result!;&#10;  }&#10;&#10;  @override&#10;  bool updateShouldNotify($NAME$ old) {&#10;    return $SHOULD_NOTIFY$;&#10;  }&#10;}&#10;" description="New Inherited component" toReformat="true" toShortenFQNames="true">
+        <variable name="NAME" expression="" defaultValue="" alwaysStopAt="true" />
+        <variable name="SHOULD_NOTIFY" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_TOPLEVEL" value="true" />
+        </context>
+    </template>
+    <template name="jhtml" value="([$CONTENT$])," description="Insert a html component" toReformat="false" toShortenFQNames="true">
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_STATEMENT" value="true"/>
+        </context>
+    </template>
+    <template name="jtext" value='text("$CONTENT$"),' description="Insert a text component" toReformat="false" toShortenFQNames="true">
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_STATEMENT" value="true"/>
+        </context>
+    </template>
+    <template name="jstyls" value="@css&#10;List&lt;StyleRule&gt; get styles =&gt; [&#10;  css('', [&#10;    css('&amp;').styles(&#10;      $CONTENT$,&#10;    ),&#10;  ]),&#10;];" description="Create a new styles definition" toReformat="false" toShortenFQNames="true">
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_ANYWHERE" value="true"/>
+        </context>
+    </template>
+    <template name="jevt" value="events: {'$NAME$': (event) {&#10;  $CONTENT$&#10;}},"
+              description="Insert an event handler"
+              toReformat="false"
+              toShortenFQNames="true">
+        <variable name="NAME" expression="" defaultValue="" alwaysStopAt="true"/>
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="JASPR_STATEMENT" value="true"/>
+        </context>
+    </template>
+    <template name="jclick" value="onClick: (event) {&#10;  $CONTENT$&#10;},"
+              description="Insert an onClick event handler"
+              toReformat="false"
+              toShortenFQNames="true">
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true"/>
+        <context>
+            <option name="JASPR_STATEMENT" value="true"/>
+        </context>
+    </template>
+</templateSet>
