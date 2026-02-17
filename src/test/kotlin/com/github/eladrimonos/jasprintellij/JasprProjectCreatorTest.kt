@@ -10,7 +10,26 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
 
     private val sdkPath: String by lazy {
         System.getenv("DART_SDK_PATH")
-            ?: error("DART_SDK_PATH environment variable is missing. Set it to your Dart SDK path.")
+            ?: findDartSdkFromPath()
+            ?: error(
+                "DART_SDK_PATH environment variable is missing and Dart SDK was not found in PATH. " +
+                        "Set DART_SDK_PATH to your Dart SDK home (the folder that contains bin/dart)."
+            )
+    }
+
+    private fun findDartSdkFromPath(): String? {
+        val path = System.getenv("PATH") ?: return null
+        val dartExeName = if (com.intellij.openapi.util.SystemInfo.isWindows) "dart.exe" else "dart"
+
+        for (dir in path.split(File.pathSeparator)) {
+            val dart = File(dir, dartExeName)
+            if (dart.exists() && dart.canExecute()) {
+                val sdkHome = dart.parentFile?.parentFile ?: continue
+                val dartInSdk = File(sdkHome, "bin/$dartExeName")
+                if (dartInSdk.exists()) return sdkHome.absolutePath
+            }
+        }
+        return null
     }
 
     override fun setUp() {
