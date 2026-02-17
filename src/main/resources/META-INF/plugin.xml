@@ -4,6 +4,16 @@
     <name>Jaspr</name>
     <vendor>eladrimonos</vendor>
     <category>Framework</category>
+    <description>
+        <![CDATA[
+        <p>Adds basic development support for the Jaspr framework to IntelliJ IDEA.</p>
+
+        <p>Included features:</p>
+        <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
+        <li>New File templates for quick component scaffolding</li>
+        <li>New File templates for quick component scaffolding</li>
+    ]]>
+    </description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
