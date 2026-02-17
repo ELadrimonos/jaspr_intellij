@@ -2,7 +2,7 @@
 <idea-plugin>
     <id>com.github.eladrimonos.jasprintellij</id>
     <name>Jaspr</name>
-    <vendor>eladrimonos</vendor>
+    <vendor>Adrián Primo Bernat</vendor>
     <category>Framework</category>
     <description>
         <![CDATA[
