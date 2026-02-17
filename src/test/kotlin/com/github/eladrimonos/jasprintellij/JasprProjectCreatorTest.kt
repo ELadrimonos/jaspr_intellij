@@ -9,11 +9,11 @@ import java.nio.charset.StandardCharsets
 class JasprProjectCreatorTest : BasePlatformTestCase() {
 
     private val sdkPath: String by lazy {
-        System.getenv("DART_SDK_PATH")
+        System.getenv("DART_HOME")
             ?: findDartSdkFromPath()
             ?: error(
-                "DART_SDK_PATH environment variable is missing and Dart SDK was not found in PATH. " +
-                        "Set DART_SDK_PATH to your Dart SDK home (the folder that contains bin/dart)."
+                "DART_HOME environment variable is missing and Dart SDK was not found in PATH. " +
+                        "Set DART_HOME to your Dart SDK home (the folder that contains bin/dart)."
             )
     }
 

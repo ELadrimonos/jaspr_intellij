@@ -45,20 +45,6 @@ jobs:
       - name: Install Jaspr CLI
         run: dart pub global activate jaspr_cli
 
-      # Set DART_SDK_PATH environment variable (Unix)
-      - name: Set DART_SDK_PATH (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          echo "DART_SDK_PATH=$(dirname $(dirname $(which dart)))" >> $GITHUB_ENV
-
-      # Set DART_SDK_PATH environment variable (Windows)
-      - name: Set DART_SDK_PATH (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          $dartExe = (Get-Command dart).Source
-          $sdkPath = Split-Path (Split-Path $dartExe -Parent) -Parent
-          echo "DART_SDK_PATH=$sdkPath" | Out-File -FilePath $env:GITHUB_ENV -Append
-
       # Set up the Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5
