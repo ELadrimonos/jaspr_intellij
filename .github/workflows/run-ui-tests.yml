@@ -35,6 +35,26 @@ jobs:
       - name: Fetch Sources
         uses: actions/checkout@v6
 
+      # Set up Dart SDK for E2E tests
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      # Install Jaspr CLI globally
+      - name: Install Jaspr CLI
+        run: dart pub global activate jaspr_cli
+
+      # Set DART_SDK_PATH environment variable (Unix)
+      - name: Set DART_SDK_PATH (Unix)
+        if: runner.os != 'Windows'
+        run: echo "DART_SDK_PATH=$DART_SDK_ROOT" >> $GITHUB_ENV
+
+      # Set DART_SDK_PATH environment variable (Windows)
+      - name: Set DART_SDK_PATH (Windows)
+        if: runner.os == 'Windows'
+        run: echo "DART_SDK_PATH=$env:DART_SDK_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       # Set up the Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5
