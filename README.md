@@ -27,15 +27,20 @@ Currently implemented features:
 
 This plugin focuses on improving productivity when building Jaspr applications by reducing boilerplate and accelerating component creation.
 
-<!-- Plugin description -->
-Adds basic development support for the Jaspr framework to IntelliJ IDEA.
+## Roadmap
 
-Included features:
-- Live Templates for common Jaspr components (Stateless, Stateful, Inherited)
-- New File templates for quick component scaffolding
+Based on the discussion in https://github.com/schultek/jaspr/issues/685#issuecomment-3621910414
 
-The plugin is free and open-source.
-<!-- Plugin description end -->
+- [ ] Integrate "Serve" command with debugging support.
+  - Launch the `jaspr daemon` command.
+  - Attach the IDE debugger to both client and server processes.
+- [X] Create new Project option.
+- [X] Snippets (such as creating new Stateless/Stateful components).
+- [ ] Component Scopes.
+  - Show editor hints indicating where a component is rendered using the `jaspr tooling-daemon` command.
+- [ ] HTML conversion.
+  - Convert HTML to valid Jaspr code using the `jaspr tooling-daemon` command.
+- [ ] Clean and Doctor commands.
 
 ## Installation (Placeholder)
 

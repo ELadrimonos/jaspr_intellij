@@ -2,8 +2,18 @@
 <idea-plugin>
     <id>com.github.eladrimonos.jasprintellij</id>
     <name>Jaspr</name>
-    <vendor>eladrimonos</vendor>
+    <vendor>Adrián Primo Bernat</vendor>
     <category>Framework</category>
+    <description>
+        <![CDATA[
+        <p>Adds basic development support for the Jaspr framework to IntelliJ IDEA.</p>
+
+        <p>Included features:</p>
+        <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
+        <li>New File templates for quick component scaffolding</li>
+        <li>New Project setup wizard</li>
+    ]]>
+    </description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
@@ -13,9 +23,14 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.eladrimonos.jasprintellij.toolWindow.MyToolWindowFactory"
-                    id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.MyProjectActivity"/>
+
+        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
+        <notificationGroup
+                id="JasprIntelliJ"
+                displayType="BALLOON"
+                isLogByDefault="false"
+                />
+
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
                 contextId="JASPR_TOPLEVEL"
@@ -32,6 +47,8 @@
         <internalFileTemplate name="StatelessComponent.dart"/>
         <internalFileTemplate name="StatefulComponent.dart"/>
         <internalFileTemplate name="InheritedComponent.dart"/>
+        <newProjectWizard.generator
+                implementation="com.github.eladrimonos.jasprintellij.template.project.JasprNewProjectWizard"/>
     </extensions>
 
     <actions>

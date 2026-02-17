@@ -35,6 +35,16 @@ jobs:
       - name: Fetch Sources
         uses: actions/checkout@v6
 
+      # Set up Dart SDK for E2E tests
+      - name: Setup Dart SDK
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      # Install Jaspr CLI globally
+      - name: Install Jaspr CLI
+        run: dart pub global activate jaspr_cli
+
       # Set up the Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5

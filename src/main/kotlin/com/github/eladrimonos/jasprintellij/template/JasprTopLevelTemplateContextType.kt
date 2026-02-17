@@ -5,7 +5,6 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import com.jetbrains.lang.dart.ide.template.DartTemplateContextType
 import com.jetbrains.lang.dart.psi.DartClassDefinition
-import com.jetbrains.lang.dart.psi.DartFile
 
 class JasprTopLevelTemplateContextType :
     DartTemplateContextType("Jaspr") {
