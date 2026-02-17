@@ -11,7 +11,7 @@
         <p>Included features:</p>
         <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
         <li>New File templates for quick component scaffolding</li>
-        <li>New File templates for quick component scaffolding</li>
+        <li>New Project setup wizard</li>
     ]]>
     </description>
 
