@@ -16,6 +16,12 @@ class JasprProjectCreator(
     private val logger: Logger = Logger.getInstance(JasprProjectCreator::class.java),
 ) {
 
+    private val tooling: JasprTooling = JasprTooling(
+        cliRunner = cliRunner,
+        environmentProvider = environmentProvider,
+        logger = Logger.getInstance(JasprTooling::class.java),
+    )
+
     data class Options(
         val template: String? = null,
         val mode: String = "static",
@@ -26,41 +32,7 @@ class JasprProjectCreator(
     )
 
     fun preflightCheck(sdkPath: String) {
-        val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
-        val dartExecutable = File(sdkPath, "bin/$dartExeName").absolutePath
-
-        fun runOrThrow(vararg args: String, hint: String) {
-            val cmd = GeneralCommandLine()
-                .withExePath(dartExecutable)
-                .withParameters(*args)
-                .withCharset(StandardCharsets.UTF_8)
-                .withEnvironment(environmentProvider())
-
-            val out = cliRunner.run(cmd)
-            if (out.exitCode != 0) {
-                throw ConfigurationException(
-                    buildString {
-                        appendLine(hint)
-                        appendLine("Command: dart ${args.joinToString(" ")}")
-                        if (out.stderr.isNotBlank()) appendLine("stderr:\n${out.stderr}")
-                        if (out.stdout.isNotBlank()) appendLine("stdout:\n${out.stdout}")
-                    }.trim()
-                )
-            }
-        }
-
-        // 1) Dart runnable
-        runOrThrow(
-            "--version",
-            hint = "Failed to run Dart. Verify that the selected SDK path is valid."
-        )
-
-        // 2) jaspr_cli available (global)
-        runOrThrow(
-            "pub", "global", "run", "jaspr_cli:jaspr", "--version",
-            hint = "Could not find jaspr_cli via 'dart pub global run'. " +
-                "Install it with: dart pub global activate jaspr_cli (network access is required the first time)."
-        )
+        tooling.preflightCheck(sdkPath)
     }
 
     fun create(projectDir: File, sdkPath: String, options: Options) {

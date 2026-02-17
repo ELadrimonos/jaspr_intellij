@@ -23,9 +23,14 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.eladrimonos.jasprintellij.toolWindow.MyToolWindowFactory"
-                    id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.MyProjectActivity"/>
+
+        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
+        <notificationGroup
+                id="JasprIntelliJ"
+                displayType="BALLOON"
+                isLogByDefault="false"
+                />
+
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
                 contextId="JASPR_TOPLEVEL"
