@@ -25,6 +25,7 @@
     <extensions defaultExtensionNs="com.intellij">
 
         <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
+        <configurationType implementation="com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationType"/>
         <notificationGroup
                 id="JasprIntelliJ"
                 displayType="BALLOON"
