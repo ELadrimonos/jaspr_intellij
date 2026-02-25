@@ -36,20 +36,24 @@ class JasprProjectCreator(
     }
 
     fun create(projectDir: File, sdkPath: String, options: Options) {
-        val parentDir = projectDir.parentFile ?: throw ConfigurationException("Project parent directory not found")
+        if (projectDir.parentFile == null) throw ConfigurationException("Project parent directory not found")
         val projectName = projectDir.name
 
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExecutable = File(sdkPath, "bin/$dartExeName").absolutePath
 
-        val tempDir = File(parentDir, "${projectName}_temp_${timeProvider()}")
+        // Use the real system temp dir as the CLI working directory.
+        // projectDir.parentFile may be a virtual IntelliJ VFS path (e.g. "temp:/root"
+        // on Windows test runners) which is not a valid filesystem path for external processes.
+        val systemTempDir = File(System.getProperty("java.io.tmpdir"))
+        val tempDir = File(systemTempDir, "${projectName}_temp_${timeProvider()}")
         val tempProjectName = tempDir.name
 
         try {
             val commandLine = GeneralCommandLine()
                 .withExePath(dartExecutable)
                 .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "create")
-                .withWorkDirectory(parentDir)
+                .withWorkDirectory(systemTempDir)
                 .withCharset(StandardCharsets.UTF_8)
                 .withEnvironment(environmentProvider())
 
