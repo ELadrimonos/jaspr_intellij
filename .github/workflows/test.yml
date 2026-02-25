@@ -7,13 +7,13 @@
 #
 # Workflow is triggered manually.
 
-name: Run UI Tests
+name: Run Tests
 on:
   workflow_dispatch
 
 jobs:
 
-  testUI:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -45,9 +45,9 @@ jobs:
       - name: Set DART_HOME
         shell: bash
         run: |
-         DART_EXEC=$(which dart)
-         DART_SDK=$(dirname $(dirname $DART_EXEC))
-         echo "DART_HOME=$DART_SDK" >> $GITHUB_ENV
+          DART_EXEC=$(which dart)
+          DART_SDK=$(dirname $(dirname $DART_EXEC))
+          echo "DART_HOME=$DART_SDK" >> $GITHUB_ENV
 
       # Install Jaspr CLI globally
       - name: Install Jaspr CLI
@@ -78,6 +78,6 @@ jobs:
           max-attempts: 15
           retry-delay: 30s
 
-      # Run tests
+      # Run integration tests (E2E, requires Dart + running IDE)
       - name: Tests
-        run: ./gradlew test
+        run: ./gradlew integrationTest
