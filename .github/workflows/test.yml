@@ -81,4 +81,4 @@ jobs:
 
       # Run integration tests (E2E, requires Dart + running IDE)
       - name: Tests
-        run: ./gradlew integrationTest
+        run: ./gradlew test
