@@ -55,10 +55,8 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar estructura básica
         assertBasicProjectStructure(projectDir, "jaspr_static_test")
 
-        // Verificar contenido específico de modo static
         val pubspec = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
         assertTrue("pubspec.yaml should contain project name", pubspec.contains("name: jaspr_static_test"))
         assertTrue("pubspec.yaml should contain jaspr dependency", pubspec.contains("jaspr:"))
@@ -83,15 +81,12 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar estructura básica
         assertBasicProjectStructure(projectDir, "jaspr_server_test")
 
-        // Verificar contenido específico de modo server
         val pubspec = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
         assertTrue("pubspec.yaml should contain jaspr dependency", pubspec.contains("jaspr:"))
         assertTrue("pubspec.yaml should contain shelf dependency", pubspec.contains("shelf"))
 
-        // En modo server debería existir un archivo de servidor
         val libDir = File(projectDir, "lib")
         assertTrue("lib directory should exist", libDir.exists())
 
@@ -115,10 +110,8 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar estructura básica
         assertBasicProjectStructure(projectDir, "jaspr_client_test")
 
-        // Verificar contenido específico de modo client
         val pubspec = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
         assertTrue("pubspec.yaml should contain project name", pubspec.contains("name: jaspr_client_test"))
         assertTrue("pubspec.yaml should contain jaspr dependency", pubspec.contains("jaspr:"))
@@ -144,10 +137,8 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar estructura básica
         assertBasicProjectStructure(projectDir, "jaspr_docs_test")
 
-        // Verificar que el nombre del proyecto fue reemplazado correctamente
         val pubspec = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
         assertTrue("pubspec.yaml should contain correct project name", pubspec.contains("name: jaspr_docs_test"))
 
@@ -171,7 +162,6 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar que el nombre del proyecto se reemplazó en todos los archivos clave
         val expectedName = "my_renamed_project"
 
         val pubspecContent = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
@@ -182,7 +172,7 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
         assertFalse("README.md should not contain temp name", readmeContent.contains("_temp_"))
 
         val analysisContent = File(projectDir, "analysis_options.yaml").readText(StandardCharsets.UTF_8)
-        // El analysis_options puede o no contener el nombre del proyecto, pero no debe tener _temp_
+
         assertFalse("analysis_options.yaml should not contain temp name", analysisContent.contains("_temp_"))
 
         println("✓ Project name replacement test passed")
@@ -193,9 +183,6 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
         val parentDir = projectDir.parentFile
         val creator = JasprProjectCreator(cliRunner = DefaultCliRunner)
 
-        // Verificar que no hay directorios temporales antes
-        val tempDirsBefore = parentDir.listFiles()?.filter { it.name.contains("_temp_") } ?: emptyList()
-
         creator.create(
             projectDir = projectDir,
             sdkPath = sdkPath,
@@ -205,11 +192,9 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
             )
         )
 
-        // Verificar que el proyecto se creó correctamente
         assertTrue("Project directory should exist", projectDir.exists())
         assertTrue("pubspec.yaml should exist", File(projectDir, "pubspec.yaml").exists())
 
-        // Verificar que no quedaron directorios temporales
         val tempDirsAfter = parentDir.listFiles()?.filter {
             it.name.contains("_temp_") && it.name.startsWith("cleanup_test_project")
         } ?: emptyList()
@@ -254,7 +239,10 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
     // ========== Helper Methods ==========
 
     private fun createTestProjectDir(name: String): File {
-        val root = File(myFixture.tempDirPath)
+        // myFixture.tempDirPath returns a virtual IntelliJ VFS path (e.g. "temp:/root")
+        // which is not a valid real filesystem path on Windows. We use the system temp
+        // directory instead so that File I/O and external processes always work correctly.
+        val root = File(System.getProperty("java.io.tmpdir"), "jaspr_intellij_tests")
         return File(root, name).apply {
             if (exists()) deleteRecursively()
             mkdirs()
@@ -265,23 +253,19 @@ class JasprProjectCreatorTest : BasePlatformTestCase() {
         assertTrue("Project directory should exist", projectDir.exists())
         assertTrue("Project directory should be a directory", projectDir.isDirectory)
 
-        // Archivos principales
         assertTrue("pubspec.yaml should exist", File(projectDir, "pubspec.yaml").exists())
         assertTrue("README.md should exist", File(projectDir, "README.md").exists())
         assertTrue("analysis_options.yaml should exist", File(projectDir, "analysis_options.yaml").exists())
 
-        // Directorio lib
         val libDir = File(projectDir, "lib")
         assertTrue("lib directory should exist", libDir.exists())
         assertTrue("lib directory should be a directory", libDir.isDirectory)
 
-        // Al menos un archivo .dart en lib
         val dartFiles = libDir.walkTopDown()
             .filter { it.isFile && it.extension == "dart" }
             .toList()
         assertTrue("Should have at least one .dart file in lib", dartFiles.isNotEmpty())
 
-        // Verificar nombre del proyecto en pubspec.yaml
         val pubspecContent = File(projectDir, "pubspec.yaml").readText(StandardCharsets.UTF_8)
         assertTrue(
             "pubspec.yaml should contain correct project name",
