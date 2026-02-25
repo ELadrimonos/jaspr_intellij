@@ -41,6 +41,14 @@ jobs:
         with:
           sdk: stable
 
+      # Set DART_HOME environment variable for tests
+      - name: Set DART_HOME
+        shell: bash
+        run: |
+         DART_EXEC=$(which dart)
+         DART_SDK=$(dirname $(dirname $DART_EXEC))
+         echo "DART_HOME=$DART_SDK" >> $GITHUB_ENV
+
       # Install Jaspr CLI globally
       - name: Install Jaspr CLI
         run: dart pub global activate jaspr_cli
