@@ -7,13 +7,14 @@
 #
 # Workflow is triggered manually.
 
-name: Run UI Tests
+name: Run Tests
 on:
-  workflow_dispatch
+  workflow_dispatch:
+  workflow_call:
 
 jobs:
 
-  testUI:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,6 +41,24 @@ jobs:
         uses: dart-lang/setup-dart@v1
         with:
           sdk: stable
+
+      # Set DART_HOME for Linux/macOS
+      - name: Set DART_HOME
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          DART_EXEC=$(which dart)
+          DART_SDK=$(dirname $(dirname $DART_EXEC))
+          echo "DART_HOME=$DART_SDK" >> $GITHUB_ENV
+
+      # Set DART_HOME for Windows
+      - name: Set DART_HOME
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dartPath = (Get-Command dart).Source
+          $dartSdk = Split-Path $dartPath -Parent | Split-Path -Parent
+          echo "DART_HOME=$dartSdk" >> $env:GITHUB_ENV
 
       # Install Jaspr CLI globally
       - name: Install Jaspr CLI
@@ -70,6 +89,6 @@ jobs:
           max-attempts: 15
           retry-delay: 30s
 
-      # Run tests
+      # Run integration tests (E2E, requires Dart + running IDE)
       - name: Tests
         run: ./gradlew test
