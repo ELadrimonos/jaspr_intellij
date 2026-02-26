@@ -97,6 +97,8 @@ class JasprProjectCreator(
             "pubspec.yaml",
             "README.md",
             "analysis_options.yaml",
+            ".dart_tool/package_config.json",
+            ".dart_tool/package_graph.json",
         )
 
         filesToUpdate.forEach { fileName ->
