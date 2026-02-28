@@ -4,5 +4,5 @@ import com.intellij.openapi.util.IconLoader
 
 object JasprIcons {
     @JvmField
-    val FileIcon = IconLoader.getIcon("/icons/fileIcon.svg", javaClass)
+    val JasprLogo = IconLoader.getIcon("/icons/fileIcon.svg", javaClass)
 }

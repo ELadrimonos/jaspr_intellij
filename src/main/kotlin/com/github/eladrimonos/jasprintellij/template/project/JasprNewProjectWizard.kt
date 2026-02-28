@@ -13,7 +13,7 @@ import javax.swing.Icon
 class JasprNewProjectWizard : GeneratorNewProjectWizard {
     override val id: String = "jaspr"
     override val name: String = "Jaspr"
-    override val icon: Icon = JasprIcons.FileIcon
+    override val icon: Icon = JasprIcons.JasprLogo
     override fun createStep(context: WizardContext): NewProjectWizardStep {
         return RootNewProjectWizardStep(context)
             .nextStep(::NewProjectWizardBaseStep)

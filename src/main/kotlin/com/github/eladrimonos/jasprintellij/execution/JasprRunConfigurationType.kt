@@ -7,7 +7,7 @@ class JasprRunConfigurationType : ConfigurationTypeBase(
     "JasprRunConfiguration",
     "Jaspr",
     "Jaspr Run Configuration",
-    JasprIcons.FileIcon
+    JasprIcons.JasprLogo
 ) {
     init {
         addFactory(JasprConfigurationFactory(this))

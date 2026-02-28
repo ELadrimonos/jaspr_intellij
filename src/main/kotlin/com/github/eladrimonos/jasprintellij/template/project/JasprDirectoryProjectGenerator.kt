@@ -27,7 +27,7 @@ class JasprDirectoryProjectGenerator : WebProjectTemplate<JasprSettingsPanel>() 
         "Create a new <b>Jaspr</b> web project — a Dart framework for " +
                 "building reactive, isomorphic web UIs."
 
-    override fun getIcon(): Icon = JasprIcons.FileIcon
+    override fun getIcon(): Icon = JasprIcons.JasprLogo
 
     // ── Peer ─────────────────────────────────────────────────────────────────
 

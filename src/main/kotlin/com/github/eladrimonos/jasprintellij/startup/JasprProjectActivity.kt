@@ -47,7 +47,7 @@ class JasprProjectActivity : ProjectActivity {
                         "It is recommended to use the same version.",
                 NotificationType.WARNING
             )
-            .setIcon(JasprIcons.FileIcon)
+            .setIcon(JasprIcons.JasprLogo)
             .notify(project)
     }
 }
