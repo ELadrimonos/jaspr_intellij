@@ -4,6 +4,7 @@ import com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationSetup
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.module.JasprModuleConfigurator
 import com.github.eladrimonos.jasprintellij.services.JasprTooling
+import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.project.Project
@@ -12,13 +13,9 @@ import java.io.File
 
 class JasprProjectActivity : ProjectActivity {
     override suspend fun execute(project: Project) {
+        if (!JasprTooling.isJasprProject(project)) return
         val basePath = project.basePath ?: return
         val projectDir = File(basePath)
-
-        val pubspec = File(projectDir, "pubspec.yaml")
-        if (!pubspec.exists()) return
-        val pubspecContent = pubspec.readText()
-        if (!pubspecContent.contains("jaspr")) return
 
         // Safety net: creates the run config if the project was opened without
         // going through the wizard (cloned repo, upgraded plugin, etc.).
@@ -28,6 +25,9 @@ class JasprProjectActivity : ProjectActivity {
 
         // Ensure all modules are configured as Dart/Jaspr modules.
         JasprModuleConfigurator.ensureConfigured(project)
+
+        // Start the Jaspr Tooling Daemon for this project.
+        project.getService(JasprToolingDaemonService::class.java)?.start()
 
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return
 

@@ -23,6 +23,8 @@
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
+    <!-- TODO Extract Keys/Text/Description -->
+
     <extensions defaultExtensionNs="com.intellij">
 
         <postStartupActivity
@@ -78,6 +80,8 @@
             <action id="Jaspr.Clean" class="com.github.eladrimonos.jasprintellij.actions.JasprCleanAction"
                     text="Jaspr Clean" description="Run 'jaspr clean'"/>
             <separator/>
+            <action id="Jaspr.DaemonStatus" class="com.github.eladrimonos.jasprintellij.actions.JasprDaemonStatusAction"
+                    text="Check Daemon Status" description="Show the current status of the Jaspr Tooling Daemon"/>
             <action id="Jaspr.UpdateCli" class="com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction"
                     text="Update Jaspr CLI" description="Run 'dart pub global activate jaspr_cli'"/>
         </group>
