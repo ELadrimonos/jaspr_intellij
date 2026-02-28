@@ -6,60 +6,76 @@
     <category>Framework</category>
     <description>
         <![CDATA[
-        <p>Adds basic development support for the Jaspr framework to IntelliJ IDEA.</p>
-
+        <p>Adds development support for the <a href="https://jaspr.site">Jaspr</a> framework to JetBrains IDEs.</p>
         <p>Included features:</p>
-        <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
-        <li>New File templates for quick component scaffolding</li>
-        <li>New Project setup wizard</li>
-    ]]>
+        <ul>
+            <li>New Project wizard with full Jaspr CLI configuration</li>
+            <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
+            <li>New File templates for quick component scaffolding</li>
+            <li>Run configuration for <code>jaspr serve</code></li>
+        </ul>
+        ]]>
     </description>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.modules.lang</depends>
-    <depends>com.intellij.modules.xdebugger</depends>
     <depends>Dart</depends>
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
 
-        <postStartupActivity implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
-        <configurationType implementation="com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationType"/>
+        <postStartupActivity
+                implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
+
+        <configurationType
+                implementation="com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationType"/>
+
         <notificationGroup
                 id="JasprIntelliJ"
                 displayType="BALLOON"
-                isLogByDefault="false"
-                />
+                isLogByDefault="false"/>
 
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
                 contextId="JASPR_TOPLEVEL"
-                implementation="com.github.eladrimonos.jasprintellij.template.JasprTopLevelTemplateContextType"
-        />
+                implementation="com.github.eladrimonos.jasprintellij.template.JasprTopLevelTemplateContextType"/>
         <liveTemplateContext
                 contextId="JASPR_STATEMENT"
-                implementation="com.github.eladrimonos.jasprintellij.template.JasprStatementTemplateContextType"
-        />
+                implementation="com.github.eladrimonos.jasprintellij.template.JasprStatementTemplateContextType"/>
         <liveTemplateContext
                 contextId="JASPR_ANYWHERE"
-                implementation="com.github.eladrimonos.jasprintellij.template.JasprAnywhereTemplateContextType"
-        />
+                implementation="com.github.eladrimonos.jasprintellij.template.JasprAnywhereTemplateContextType"/>
+
         <internalFileTemplate name="StatelessComponent.dart"/>
         <internalFileTemplate name="StatefulComponent.dart"/>
         <internalFileTemplate name="InheritedComponent.dart"/>
+
+        <!--
+            IntelliJ IDEA new-project wizard (File > New > Project…)
+            Uses the GeneratorNewProjectWizard API — only works in IDEA.
+        -->
         <newProjectWizard.generator
                 implementation="com.github.eladrimonos.jasprintellij.template.project.JasprNewProjectWizard"/>
+
+        <!--
+            WebStorm / GoLand / Rider / other small IDEs.
+            Shows up on the Welcome screen and in File > New > Project…
+            Uses WebProjectTemplate (DirectoryProjectGenerator).
+        -->
+        <directoryProjectGenerator
+                implementation="com.github.eladrimonos.jasprintellij.template.project.JasprDirectoryProjectGenerator"/>
+
     </extensions>
 
     <actions>
         <action
                 id="New.JasprFile"
-                class="com.github.eladrimonos.jasprintellij.template.file.NewJasprFileAction"
-        >
-            <add-to-group group-id="NewGroup"
-                          anchor="after"
-                          relative-to-action="Dart.NewDartFile"/>
+                class="com.github.eladrimonos.jasprintellij.template.file.NewJasprFileAction">
+            <add-to-group
+                    group-id="NewGroup"
+                    anchor="after"
+                    relative-to-action="Dart.NewDartFile"/>
         </action>
     </actions>
 </idea-plugin>
