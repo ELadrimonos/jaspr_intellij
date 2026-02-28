@@ -40,7 +40,7 @@ Based on the discussion in https://github.com/schultek/jaspr/issues/685#issuecom
   - Show editor hints indicating where a component is rendered using the `jaspr tooling-daemon` command.
 - [ ] HTML conversion.
   - Convert HTML to valid Jaspr code using the `jaspr tooling-daemon` command.
-- [ ] Clean and Doctor commands.
+- [X] Clean and Doctor commands.
 
 ## Installation (Placeholder)
 

@@ -69,6 +69,19 @@
     </extensions>
 
     <actions>
+        <group id="JasprToolsGroup" class="com.github.eladrimonos.jasprintellij.actions.JasprActionGroup" text="Jaspr" popup="true">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <action id="Jaspr.Build" class="com.github.eladrimonos.jasprintellij.actions.JasprBuildAction"
+                    text="Jaspr Build" description="Run 'jaspr build'"/>
+            <action id="Jaspr.Doctor" class="com.github.eladrimonos.jasprintellij.actions.JasprDoctorAction"
+                    text="Jaspr Doctor" description="Run 'jaspr doctor'"/>
+            <action id="Jaspr.Clean" class="com.github.eladrimonos.jasprintellij.actions.JasprCleanAction"
+                    text="Jaspr Clean" description="Run 'jaspr clean'"/>
+            <separator/>
+            <action id="Jaspr.UpdateCli" class="com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction"
+                    text="Update Jaspr CLI" description="Run 'dart pub global activate jaspr_cli'"/>
+        </group>
+
         <action
                 id="New.JasprFile"
                 class="com.github.eladrimonos.jasprintellij.template.file.NewJasprFileAction">
