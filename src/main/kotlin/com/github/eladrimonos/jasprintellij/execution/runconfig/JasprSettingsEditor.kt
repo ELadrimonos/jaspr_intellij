@@ -1,4 +1,4 @@
-package com.github.eladrimonos.jasprintellij.execution
+package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.intellij.execution.ui.RunConfigurationFragmentedEditor
 import com.intellij.execution.ui.SettingsEditorFragment
@@ -139,11 +139,6 @@ class JasprSettingsEditor(
             "jaspr.skipServer", "Skip server", "Server",
             Predicate { it.skipServer }
         ) { config: JasprRunConfiguration, value: Boolean -> config.skipServer = value })
-        // FIXME Currently throws error for port usage and server process keeps running until manually stopped
-        fragments.add(SettingsEditorFragment.createTag(
-            "jaspr.chrome", "Launch in Chrome", "Browser",
-            Predicate { it.launchInChrome }
-        ) { config: JasprRunConfiguration, value: Boolean -> config.launchInChrome = value })
         fragments.add(SettingsEditorFragment.createTag(
             "jaspr.managed", "Managed build options", "Build",
             Predicate { it.managedBuildOptions }

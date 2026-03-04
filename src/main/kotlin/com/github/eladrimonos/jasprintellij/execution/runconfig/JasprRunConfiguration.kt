@@ -1,5 +1,6 @@
-package com.github.eladrimonos.jasprintellij.execution
+package com.github.eladrimonos.jasprintellij.execution.runconfig
 
+import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunProfileState
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.ConfigurationFactory
 import com.intellij.execution.configurations.RunConfiguration
@@ -52,7 +53,6 @@ class JasprRunConfiguration(
         JDOMExternalizerUtil.writeField(element, "verbose", verbose.toString())
         JDOMExternalizerUtil.writeField(element, "experimentalWasm", experimentalWasm.toString())
         JDOMExternalizerUtil.writeField(element, "skipServer", skipServer.toString())
-        JDOMExternalizerUtil.writeField(element, "launchInChrome", launchInChrome.toString())
         JDOMExternalizerUtil.writeField(element, "managedBuildOptions", managedBuildOptions.toString())
     }
 
@@ -76,7 +76,7 @@ class JasprRunConfiguration(
         verbose = JDOMExternalizerUtil.readField(element, "verbose")?.toBoolean() ?: false
         experimentalWasm = JDOMExternalizerUtil.readField(element, "experimentalWasm")?.toBoolean() ?: false
         skipServer = JDOMExternalizerUtil.readField(element, "skipServer")?.toBoolean() ?: false
-        launchInChrome = JDOMExternalizerUtil.readField(element, "launchInChrome")?.toBoolean() ?: false
+
         // managedBuildOptions defaults to true
         managedBuildOptions = JDOMExternalizerUtil.readField(element, "managedBuildOptions")?.toBoolean() ?: true
     }
@@ -124,10 +124,6 @@ class JasprRunConfiguration(
     var skipServer: Boolean
         get() = options.skipServer
         set(v) { options.skipServer = v }
-
-    var launchInChrome: Boolean
-        get() = options.launchInChrome
-        set(v) { options.launchInChrome = v }
 
     var managedBuildOptions: Boolean
         get() = options.managedBuildOptions

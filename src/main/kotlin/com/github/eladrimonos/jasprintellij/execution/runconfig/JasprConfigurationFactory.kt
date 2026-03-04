@@ -1,4 +1,4 @@
-package com.github.eladrimonos.jasprintellij.execution
+package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.intellij.execution.configurations.ConfigurationFactory
 import com.intellij.execution.configurations.ConfigurationType

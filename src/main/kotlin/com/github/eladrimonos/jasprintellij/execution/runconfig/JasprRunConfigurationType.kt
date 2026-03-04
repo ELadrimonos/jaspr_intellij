@@ -1,4 +1,4 @@
-package com.github.eladrimonos.jasprintellij.execution
+package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.intellij.execution.configurations.ConfigurationTypeBase

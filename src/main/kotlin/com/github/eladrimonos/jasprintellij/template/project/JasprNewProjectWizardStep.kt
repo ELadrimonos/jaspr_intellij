@@ -1,6 +1,6 @@
 package com.github.eladrimonos.jasprintellij.template.project
 
-import com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationSetup
+import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationSetup
 import com.github.eladrimonos.jasprintellij.module.JasprModuleConfigurator
 import com.github.eladrimonos.jasprintellij.services.JasprProjectCreator
 import com.intellij.ide.util.PropertiesComponent
@@ -72,28 +72,17 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
 
             ProgressManager.getInstance().runProcessWithProgressSynchronously(
                 {
-                    // Step 1 — verify dart + jaspr_cli are reachable.
                     creator.preflightCheck(sdkPath)
+                    creator.create(projectDir = projectDir, sdkPath = sdkPath, options = panel.toCreatorOptions())
 
-                    // Step 2 — scaffold the project on disk.
-                    creator.create(
-                        projectDir = projectDir,
-                        sdkPath = sdkPath,
-                        options = panel.toCreatorOptions(),
-                    )
+                    // addIfNeeded does I/O — keep it here on the background thread.
+                    JasprRunConfigurationSetup.addIfNeeded(project, projectDir)
 
-                    // Step 3 — refresh VFS, configure the module, and create
-                    // the run configuration while the files are already on disk.
-                    //
-                    // invokeAndWait keeps this synchronous so everything is ready
-                    // before the IDE opens the project window.
                     ApplicationManager.getApplication().invokeAndWait {
                         LocalFileSystem.getInstance()
                             .refreshAndFindFileByIoFile(projectDir)
                             ?.refresh(false, true)
-
                         JasprModuleConfigurator.ensureConfigured(project)
-                        JasprRunConfigurationSetup.addIfNeeded(project, projectDir)
                     }
                 },
                 "Creating Jaspr Project…",

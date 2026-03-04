@@ -6,15 +6,16 @@
     <category>Framework</category>
     <description>
         <![CDATA[
-        <p>Adds development support for the <a href="https://jaspr.site">Jaspr</a> framework to JetBrains IDEs.</p>
-        <p>Included features:</p>
-        <ul>
-            <li>New Project wizard with full Jaspr CLI configuration</li>
-            <li>Live Templates for common Jaspr components (Stateless, Stateful, Inherited)</li>
-            <li>New File templates for quick component scaffolding</li>
-            <li>Run configuration for <code>jaspr serve</code></li>
-        </ul>
-        ]]>
+    <p>Adds development support for the <a href="https://jaspr.site">Jaspr</a> framework to JetBrains IDEs.</p>
+    <ul>
+        <li><b>Run configuration</b> — runs <code>jaspr daemon</code> with graceful shutdown and Chrome lifecycle management. Colour-coded console output separated by source: CLI, builder, server, and client.</li>
+        <li><b>Component Scopes</b> — connects to <code>jaspr tooling-daemon</code> automatically on project open and shows inline editor hints indicating whether a component renders on the server or the client.</li>
+        <li><b>New Project wizard</b> — scaffolds a Jaspr app from scratch with full CLI configuration.</li>
+        <li><b>Live Templates</b> — <code>stlessc</code>, <code>stfulc</code>, <code>inhc</code>, <code>jhtml</code>, <code>jtext</code>, <code>jstyls</code>, <code>jevt</code>, <code>jclick</code>.</li>
+        <li><b>File templates</b> — StatelessComponent, StatefulComponent, InheritedComponent.</li>
+        <li><b>Tooling</b> — Clean and Doctor commands. Version mismatch notification when <code>jaspr_cli</code> and <code>pubspec.yaml</code> versions differ.</li>
+    </ul>
+    ]]>
     </description>
 
     <depends>com.intellij.modules.platform</depends>
@@ -29,17 +30,17 @@
                 implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprCodeVisionGroupSettingProvider"/>
 
         <codeInsight.daemonBoundCodeVisionProvider order="first"
-                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprServerScopeProvider"/>
+                                                   implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprServerScopeProvider"/>
         <codeInsight.daemonBoundCodeVisionProvider
                 implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprClientScopeProvider"/>
         <codeInsight.daemonBoundCodeVisionProvider order="last"
-                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprHintScopeProvider"/>
+                                                   implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprHintScopeProvider"/>
 
         <postStartupActivity
                 implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
 
         <configurationType
-                implementation="com.github.eladrimonos.jasprintellij.execution.JasprRunConfigurationType"/>
+                implementation="com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationType"/>
 
         <notificationGroup
                 id="JasprIntelliJ"
@@ -79,11 +80,13 @@
     </extensions>
 
     <actions>
-        <group id="JasprToolsGroup" class="com.github.eladrimonos.jasprintellij.actions.JasprActionGroup" text="Jaspr" popup="true">
+        <group id="JasprToolsGroup" class="com.github.eladrimonos.jasprintellij.actions.JasprActionGroup" text="Jaspr"
+               popup="true">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="Jaspr.Build" class="com.github.eladrimonos.jasprintellij.actions.JasprBuildAction"
                     text="Jaspr Build" description="Run 'jaspr build'"/>
-            <action id="Jaspr.Doctor" class="com.github.eladrimonos.jasprintellij.actions.JasprDoctorAction" description="Run 'jaspr doctor'" text="Jaspr Doctor"/>
+            <action id="Jaspr.Doctor" class="com.github.eladrimonos.jasprintellij.actions.JasprDoctorAction"
+                    description="Run 'jaspr doctor'" text="Jaspr Doctor"/>
             <action id="Jaspr.Clean" class="com.github.eladrimonos.jasprintellij.actions.JasprCleanAction"
                     text="Jaspr Clean" description="Run 'jaspr clean'"/>
             <separator/>

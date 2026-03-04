@@ -1,4 +1,4 @@
-package com.github.eladrimonos.jasprintellij.execution
+package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.intellij.execution.configurations.RunConfigurationOptions
 
@@ -57,10 +57,6 @@ class JasprRunConfigurationOptions : RunConfigurationOptions() {
     /** Skips running the server. Corresponds to `--skip-server`. */
     private val _skipServer = property(false).provideDelegate(this, ::skipServer)
     var skipServer: Boolean by _skipServer
-
-    /** Launches the application in Chrome. Corresponds to `--launch-in-chrome`. */
-    private val _launchInChrome = property(false).provideDelegate(this, ::launchInChrome)
-    var launchInChrome: Boolean by _launchInChrome
 
     /** Manages build options automatically. Corresponds to `--[no-]managed-build-options`. */
     private val _managedBuildOptions = property(true).provideDelegate(this, ::managedBuildOptions)

@@ -41,6 +41,8 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         get() = processHandler?.isProcessTerminated == false
 
     fun start() {
+        if (isAlive) return
+
         if (processHandler != null && !processHandler!!.isProcessTerminated) return
 
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return
