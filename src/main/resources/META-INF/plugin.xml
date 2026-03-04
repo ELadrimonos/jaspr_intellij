@@ -23,9 +23,17 @@
 
     <resource-bundle>messages.MyBundle</resource-bundle>
 
-    <!-- TODO Extract Keys/Text/Description -->
-
     <extensions defaultExtensionNs="com.intellij">
+
+        <config.codeVisionGroupSettingProvider
+                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprCodeVisionGroupSettingProvider"/>
+
+        <codeInsight.daemonBoundCodeVisionProvider order="first"
+                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprServerScopeProvider"/>
+        <codeInsight.daemonBoundCodeVisionProvider
+                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprClientScopeProvider"/>
+        <codeInsight.daemonBoundCodeVisionProvider order="last"
+                implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprHintScopeProvider"/>
 
         <postStartupActivity
                 implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
@@ -36,7 +44,7 @@
         <notificationGroup
                 id="JasprIntelliJ"
                 displayType="BALLOON"
-                isLogByDefault="false"/>
+                isLogByDefault="false" bundle="messages.MyBundle"/>
 
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
