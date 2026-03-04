@@ -66,6 +66,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                                         range to ClickableTextCodeVisionEntry(
                                             text = JasprBundle.message("jaspr.component.scopes.server.label"),
                                             providerId = id,
+                                            icon = JasprIcons.Server,
                                             onClick = { _: MouseEvent?, ed: Editor ->
                                                 JasprScopeNavigationHandler.navigate(ed, url)
                                             }
@@ -81,7 +82,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                                         range to ClickableTextCodeVisionEntry(
                                             text = JasprBundle.message("jaspr.component.scopes.client.label"),
                                             providerId = id,
-                                            icon = JasprIcons.JasprLogo,
+                                            icon = JasprIcons.Client,
                                             onClick = { _: MouseEvent?, ed: Editor ->
                                                 JasprScopeNavigationHandler.navigate(ed, url)
                                             }
@@ -95,6 +96,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                                     range to ClickableTextCodeVisionEntry(
                                         text = JasprBundle.message("jaspr.component.scopes.hint.label"),
                                         providerId = id,
+                                        icon = JasprIcons.Question,
                                         onClick = { _: MouseEvent?, ed: Editor ->
                                             JasprScopeNavigationHandler.navigate(ed, HINT_URL)
                                         }
