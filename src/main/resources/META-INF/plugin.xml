@@ -21,7 +21,7 @@
     <depends>com.intellij.modules.lang</depends>
     <depends>Dart</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.JasprBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
 
@@ -44,7 +44,7 @@
         <notificationGroup
                 id="JasprIntelliJ"
                 displayType="BALLOON"
-                isLogByDefault="false" bundle="messages.MyBundle"/>
+                isLogByDefault="false" bundle="messages.JasprBundle"/>
 
         <defaultLiveTemplates file="/liveTemplates/jaspr.xml"/>
         <liveTemplateContext
@@ -83,8 +83,7 @@
             <add-to-group group-id="ToolsMenu" anchor="last"/>
             <action id="Jaspr.Build" class="com.github.eladrimonos.jasprintellij.actions.JasprBuildAction"
                     text="Jaspr Build" description="Run 'jaspr build'"/>
-            <action id="Jaspr.Doctor" class="com.github.eladrimonos.jasprintellij.actions.JasprDoctorAction"
-                    text="Jaspr Doctor" description="Run 'jaspr doctor'"/>
+            <action id="Jaspr.Doctor" class="com.github.eladrimonos.jasprintellij.actions.JasprDoctorAction" description="Run 'jaspr doctor'" text="Jaspr Doctor"/>
             <action id="Jaspr.Clean" class="com.github.eladrimonos.jasprintellij.actions.JasprCleanAction"
                     text="Jaspr Clean" description="Run 'jaspr clean'"/>
             <separator/>
