@@ -24,7 +24,7 @@ import java.io.File
  */
 class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
 
-    private val settingsPanel = JasprSettingsPanel()
+    private val settingsPanel = JasprSettingsPanel(project = context.project)
     private val projectCreator = JasprProjectCreator()
 
     // ── UI ───────────────────────────────────────────────────────────────────

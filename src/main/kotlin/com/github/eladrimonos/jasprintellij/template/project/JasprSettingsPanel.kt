@@ -2,6 +2,9 @@ package com.github.eladrimonos.jasprintellij.template.project
 
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.ProjectManager
+import com.jetbrains.lang.dart.sdk.DartSdk
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindItem
@@ -13,7 +16,7 @@ import javax.swing.JComboBox
 import javax.swing.JComponent
 import javax.swing.JTextField
 
-class JasprSettingsPanel {
+class JasprSettingsPanel(private val project: Project? = null) {
 
     // ── State ────────────────────────────────────────────────────────────────
 
@@ -43,12 +46,30 @@ class JasprSettingsPanel {
         get() = sdkField?.text?.trim() ?: sdkPathInitial
 
     init {
-        val last = PropertiesComponent.getInstance().getValue("dart.sdk.path")
-        if (!last.isNullOrBlank() && DartSdkUtil.isDartSdkHome(last)) {
-            sdkPathInitial = last
-        } else {
-            findDartInPath()?.let { sdkPathInitial = it }
+        // Priority:
+        // 1. Dart SDK already configured in the plugin (via DartSdk / JasprDartSdkResolver)
+        // 2. Last-used path persisted in PropertiesComponent
+        // 3. dart executable found on PATH
+        sdkPathInitial = resolveInitialSdkPath() ?: ""
+    }
+
+    private fun resolveInitialSdkPath(): String? {
+        // 1. From the supplied project, or any open project that has Dart configured
+        val candidates = buildList {
+            if (project != null) add(project)
+            addAll(ProjectManager.getInstance().openProjects)
         }
+        for (p in candidates) {
+            val path = DartSdk.getDartSdk(p)?.homePath
+            if (!path.isNullOrBlank() && DartSdkUtil.isDartSdkHome(path)) return path
+        }
+
+        // 2. Last-saved path
+        val saved = PropertiesComponent.getInstance().getValue("dart.sdk.path")
+        if (!saved.isNullOrBlank() && DartSdkUtil.isDartSdkHome(saved)) return saved
+
+        // 3. PATH scan
+        return findDartInPath()
     }
 
     // ── Component ────────────────────────────────────────────────────────────

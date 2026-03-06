@@ -32,7 +32,10 @@ class JasprDirectoryProjectGenerator : WebProjectTemplate<JasprSettingsPanel>() 
     // ── Peer ─────────────────────────────────────────────────────────────────
 
     override fun createPeer(): ProjectGeneratorPeer<JasprSettingsPanel> {
-        val panel = JasprSettingsPanel()
+        val panel = JasprSettingsPanel(
+            project = com.intellij.openapi.project.ProjectManager.getInstance()
+                .openProjects.firstOrNull()
+        )
 
         return object : ProjectGeneratorPeer<JasprSettingsPanel> {
 
