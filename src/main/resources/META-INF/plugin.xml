@@ -41,6 +41,7 @@
 
         <configurationType
                 implementation="com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationType"/>
+        <programRunner implementation="com.github.eladrimonos.jasprintellij.execution.runconfig.JasprProgramRunner"/>
 
         <notificationGroup
                 id="JasprIntelliJ"
