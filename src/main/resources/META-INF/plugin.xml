@@ -105,5 +105,14 @@
                     anchor="after"
                     relative-to-action="Dart.NewDartFile"/>
         </action>
+
+        <action
+                id="Jaspr.ConvertHtmlToJaspr"
+                class="com.github.eladrimonos.jasprintellij.actions.ConvertHtmlToJasprAction"
+                text="Convert to Jaspr"
+                description="Convert this HTML file to Jaspr Dart code using the tooling daemon"
+                icon="com.github.eladrimonos.jasprintellij.icons.JasprIcons.JasprLogo">
+            <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="WeighingNewGroup" anchor="after"/>
+        </action>
     </actions>
 </idea-plugin>
