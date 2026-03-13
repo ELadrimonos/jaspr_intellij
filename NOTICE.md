@@ -1,6 +1,6 @@
 This project is an independent open source plugin.
 
-It is not affiliated with, endorsed by, or sponsored by:
+It is not affiliated with, endorsed by, sponsored by, or otherwise associated with:
 
 - The Flutter project
 - The Dart project
@@ -9,7 +9,8 @@ It is not affiliated with, endorsed by, or sponsored by:
 - JetBrains s.r.o.
 
 Flutter and Dart are trademarks of Google LLC.
-Jaspr is a separate open source project and remains the property of its respective authors.
 IntelliJ IDEA is a trademark of JetBrains s.r.o.
 
-This plugin provides compatibility/support tooling only.
+Jaspr is an independent open source project and is the property of its respective maintainers.
+
+This plugin provides compatibility and tooling support only.
