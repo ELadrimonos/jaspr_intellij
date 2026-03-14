@@ -6,4 +6,4 @@
 .qodana
 build
 
-temp*
+/temp/

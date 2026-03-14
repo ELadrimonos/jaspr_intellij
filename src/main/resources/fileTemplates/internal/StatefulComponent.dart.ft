@@ -1,6 +1,5 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/jaspr.dart';
-import 'package:jaspr_content/theme.dart';
 
 class ${NAME} extends StatefulComponent {
   const ${NAME}({super.key});
@@ -13,7 +12,7 @@ class ${NAME}State extends State<${NAME}> {
 
   @override
   Component build(BuildContext context) {
-    return div([]);
+    return #if(${BODY}) ${BODY} #else div([]) #end;
   }
 }
 

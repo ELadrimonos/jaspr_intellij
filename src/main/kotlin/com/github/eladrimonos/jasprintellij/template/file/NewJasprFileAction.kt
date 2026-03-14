@@ -10,7 +10,7 @@ class NewJasprFileAction :
    CreateFileFromTemplateAction(
         "Jaspr Component",
         "Create a new Jaspr file from component template",
-        JasprIcons.FileIcon
+        JasprIcons.JasprLogo
     ) {
 
     override fun buildDialog(
