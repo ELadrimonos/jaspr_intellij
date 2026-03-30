@@ -1,23 +1,31 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.github.eladrimonos.jasprintellij.execution.JasprDaemonProcessHandler
+import com.github.eladrimonos.jasprintellij.execution.JasprVmServiceDebugProcess
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
 import com.intellij.execution.DefaultExecutionResult
 import com.intellij.execution.ExecutionResult
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.configurations.RunProfile
 import com.intellij.execution.configurations.RunProfileState
 import com.intellij.execution.executors.DefaultDebugExecutor
+import com.intellij.execution.filters.Filter
+import com.intellij.execution.filters.HyperlinkInfo
 import com.intellij.execution.filters.TextConsoleBuilderFactory
+import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessTerminatedListener
 import com.intellij.execution.runners.ExecutionEnvironment
+import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.execution.runners.ProgramRunner
+import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
-import com.intellij.ide.browsers.BrowserLauncher
+import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.ui.components.JBTabbedPane
 import com.intellij.util.EnvironmentUtil
 import com.intellij.xdebugger.XDebugProcess
 import com.intellij.xdebugger.XDebugProcessStarter
@@ -29,6 +37,8 @@ import java.io.File
 import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import javax.swing.Icon
+import javax.swing.JComponent
 
 class JasprRunProfileState(
     private val environment: ExecutionEnvironment,
@@ -41,49 +51,61 @@ class JasprRunProfileState(
     /** True when the user clicked Debug instead of Run. */
     private val isDebug get() = environment.executor is DefaultDebugExecutor
 
-    override fun execute(executor: Executor?, runner: ProgramRunner<*>): ExecutionResult {
-        val console = TextConsoleBuilderFactory
-            .getInstance()
-            .createBuilder(project)
-            .console
+    // Two independent consoles — server-side Dart VM, and client-side browser.
+    private val serverConsole: ConsoleView = TextConsoleBuilderFactory
+        .getInstance().createBuilder(project).console
+    private val clientConsole: ConsoleView = TextConsoleBuilderFactory
+        .getInstance().createBuilder(project).console
+    private val compositeConsole = CompositeConsoleView(serverConsole, clientConsole)
 
-        val processHandler = JasprDaemonProcessHandler(
+    // Kept as a field so attachClientVmDebugger can reference it.
+    private lateinit var processHandler: JasprDaemonProcessHandler
+
+    // -------------------------------------------------------------------------
+
+    override fun execute(executor: Executor?, runner: ProgramRunner<*>): ExecutionResult {
+        processHandler = JasprDaemonProcessHandler(
             commandLine = buildCommandLine(),
             project = project,
-            onOutput = { text, type -> console.print(text, type) },
 
-            // TODO Create an IDE dev tools panel
+            // Daemon-level and server-side output → server console tab.
+            onOutput = { text, type ->
+                serverConsole.print(text, type)
+            },
 
-            // ── Server-side Dart VM ───────────────────────────────────────────
-            // Fired when jaspr emits `server.started` with the VM Service URI.
-            // In debug mode we attach DartVmServiceDebugProcess; otherwise we
-            // just print the DevTools link so the developer can open it manually.
+            // Client-side output → client console tab.
+            onClientOutput = { text, type ->
+                clientConsole.print(text, type)
+            },
+
+            // ── Server-side Dart VM ──────────────────────────────────────────
             onServerStarted = { vmServiceUri ->
+                serverConsole.print(
+                    "🔗 Dart VM Service: $vmServiceUri\n",
+                    ConsoleViewContentType.SYSTEM_OUTPUT,
+                )
                 if (isDebug) {
                     val devToolsUrl = buildDevToolsUrl(vmServiceUri)
-                    console.print(
-                        "🔗 Dart VM Service: $vmServiceUri\n",
-                        ConsoleViewContentType.SYSTEM_OUTPUT,
-                    )
-                    console.print(
+                    serverConsole.print(
                         "   DevTools: $devToolsUrl\n",
                         ConsoleViewContentType.SYSTEM_OUTPUT,
                     )
-                    attachDartVmDebugger(vmServiceUri)
+                    attachServerVmDebugger(vmServiceUri)
                 }
             },
 
-            // ── Client-side browser / JS ──────────────────────────────────────
-            // Fired when jaspr emits `client.debugPort` with a Chrome DevTools
-            // WebSocket URI (ws://host:port/path/ws).  We open the Dart DevTools
-            // page in the system browser so the developer can inspect client code.
+            // ── Client-side browser / JS ─────────────────────────────────────
+            //
+            // VS Code creates a second separate "dart" debug session here.
+            // We mirror that: a second XDebugSession is started in IntelliJ so
+            // both server and client appear as independent debug tabs.
             onClientDebugPort = { wsUri ->
+                clientConsole.print(
+                    "🌐 Client debug WS: $wsUri\n",
+                    ConsoleViewContentType.SYSTEM_OUTPUT,
+                )
                 if (isDebug) {
-                    console.print(
-                        "🌐 Client debug WS: $wsUri\n",
-                        ConsoleViewContentType.SYSTEM_OUTPUT,
-                    )
-                    openClientDevTools(wsUri)
+                    attachClientVmDebugger(wsUri)
                 }
             },
         )
@@ -91,61 +113,113 @@ class JasprRunProfileState(
         ProcessTerminatedListener.attach(processHandler)
         processHandler.startNotify()
 
-        return DefaultExecutionResult(console, processHandler)
+        return if (isDebug) {
+            val tabbedComponent = JBTabbedPane()
+            tabbedComponent.addTab("Server", serverConsole.component)
+            tabbedComponent.addTab("Client",  clientConsole.component)
+            compositeConsole.setTabbedComponent(tabbedComponent)
+            DefaultExecutionResult(compositeConsole, processHandler)
+        } else {
+            DefaultExecutionResult(serverConsole, processHandler)
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Server debugger — Dart VM Service
+    // Server debugger — Dart VM Service (mirrors VS Code's attachDebugger("Server", …))
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Attaches [DartVmServiceDebugProcess] to the already-running Dart VM.
-     *
-     * Constructor signature (Dart plugin ≥ 2024.x):
-     *   DartVmServiceDebugProcess(session, executionResult, dartUrlResolver,
-     *     dasExecutionContextId, debugType, timeout, currentWorkingDirectory)
-     *
-     * We use [DartVmServiceDebugProcess.DebugType.REMOTE] so the process
-     * connects to an already-running VM rather than launching a new one.
-     * The VM service URI must be stored in the environment's run-profile
-     * data *before* the session starts — see [storeVmServiceUri].
-     */
-    private fun attachDartVmDebugger(vmServiceUri: String) {
+    private fun attachServerVmDebugger(vmServiceUri: String) {
         ApplicationManager.getApplication().invokeLater {
             try {
                 val wsUri = toWsUri(vmServiceUri)
-
                 val projectVFile = LocalFileSystem.getInstance()
                     .findFileByPath(project.basePath ?: return@invokeLater)
                     ?: return@invokeLater
-
                 val urlResolver = DartUrlResolver.getInstance(project, projectVFile)
 
-                // Store the URI so DartVmServiceDebugProcess can read it via
-                // the standard Dart plugin infrastructure when it initialises.
                 storeVmServiceUri(wsUri)
 
                 XDebuggerManager.getInstance(project).startSession(
                     environment,
                     object : XDebugProcessStarter() {
                         override fun start(session: XDebugSession): XDebugProcess =
-                            DartVmServiceDebugProcess(
-                                /* session                 */ session,
-                                /* executionResult         */ null,   // lifecycle owned by JasprDaemonProcessHandler
-                                /* dartUrlResolver         */ urlResolver,
-                                /* dasExecutionContextId   */ null,
-                                /* debugType               */ DartVmServiceDebugProcess.DebugType.REMOTE,
-                                /* timeout                 */ 10_000,
-                                /* currentWorkingDirectory */ projectVFile,
+                            JasprVmServiceDebugProcess(
+                                session               = session,
+                                executionResult       = null,
+                                vmServiceWsUri        = wsUri,
+                                dartUrlResolver       = urlResolver,
+                                timeout               = 10_000,
+                                currentWorkingDirectory = projectVFile,
                             )
                     },
                 )
-                logger.info("Dart VM debugger session started for $wsUri")
+                logger.info("Server VM debugger session started for $wsUri")
             } catch (e: Exception) {
-                logger.warn("Failed to attach Dart VM debugger: ${e.message}", e)
+                logger.warn("Failed to attach server VM debugger: ${e.message}", e)
             }
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Client debugger — second independent XDebugSession
+    // (mirrors VS Code's attachDebugger("Client", wsUri))
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Creates a second, independent [XDebugSession] for the client-side
+     * Dart/JS process.
+     *
+     * In VS Code this is done by calling `vscode.debug.startDebugging` a
+     * second time with `{ type: "dart", request: "attach", vmServiceUri }`.
+     * Here we replicate that by building a fresh [ExecutionEnvironment] backed
+     * by a lightweight [RunProfile] so IntelliJ treats it as a separate session.
+     */
+    private fun attachClientVmDebugger(wsUri: String) {
+        ApplicationManager.getApplication().invokeLater {
+            try {
+                val wsUriNormalized = toWsUri(wsUri)
+                val projectVFile = LocalFileSystem.getInstance()
+                    .findFileByPath(project.basePath ?: return@invokeLater)
+                    ?: return@invokeLater
+                val urlResolver = DartUrlResolver.getInstance(project, projectVFile)
+
+                // A thin RunProfile that gives the client session its own name
+                // in the Debug tool window, without interfering with the server session.
+                val clientProfile = object : RunProfile {
+                    override fun getState(e: Executor, env: ExecutionEnvironment) = null
+                    override fun getName(): String = "Client | Jaspr"
+                    override fun getIcon(): Icon? = null
+                }
+
+                val clientEnv = ExecutionEnvironmentBuilder(project, environment.executor)
+                    .runProfile(clientProfile)
+                    .runner(environment.runner)
+                    .build()
+
+                XDebuggerManager.getInstance(project).startSession(
+                    clientEnv,
+                    object : XDebugProcessStarter() {
+                        override fun start(session: XDebugSession): XDebugProcess =
+                            JasprVmServiceDebugProcess(
+                                session                 = session,
+                                executionResult         = null,
+                                vmServiceWsUri          = wsUriNormalized,
+                                dartUrlResolver         = urlResolver,
+                                timeout                 = 10_000,
+                                currentWorkingDirectory = projectVFile,
+                            )
+                    },
+                )
+                logger.info("Client VM debugger session started for $wsUriNormalized")
+            } catch (e: Exception) {
+                logger.warn("Failed to attach client VM debugger: ${e.message}", e)
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // VM service URI helpers
+    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Persists the VM service URI in the run-configuration's user data so that
@@ -153,9 +227,8 @@ class JasprRunProfileState(
      * its `sessionInitialized` callback via the standard Dart plugin key
      * `DartVmServiceDebugProcess.VM_SERVICE_URI_KEY`.
      *
-     * If that key is not accessible (it may be internal/package-private in
-     * some plugin versions) the process will fall back to asking the user,
-     * which is still functional — just less seamless.
+     * Accessed via reflection because the field visibility varies across
+     * Dart plugin versions.
      */
     private fun storeVmServiceUri(wsUri: String) {
         runCatching {
@@ -167,37 +240,9 @@ class JasprRunProfileState(
             environment.putUserData(key, wsUri)
             logger.debug("Stored VM service URI in environment user data: $wsUri")
         }.onFailure {
-            // Key not accessible in this plugin version — not fatal.
             logger.debug("VM_SERVICE_URI_KEY not accessible, skipping pre-fill: ${it.message}")
         }
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Client debugger — open DevTools in the system browser
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Opens the Dart DevTools page for the client-side (browser) Dart/JS code.
-     *
-     * [wsUri] is the raw Chrome DevTools WebSocket URI emitted by jaspr's
-     * `client.debugPort` event, e.g.:
-     *   `ws://127.0.0.1:8181/TOKEN=/ws`
-     */
-    private fun openClientDevTools(wsUri: String) {
-        val devToolsUrl = buildDevToolsUrl(wsUri)
-        ApplicationManager.getApplication().invokeLater {
-            try {
-                BrowserLauncher.instance.open(devToolsUrl)
-                logger.info("Opened client DevTools: $devToolsUrl")
-            } catch (e: Exception) {
-                logger.warn("Failed to open client DevTools: ${e.message}", e)
-            }
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // URI helpers
-    // ─────────────────────────────────────────────────────────────────────────
 
     /**
      * Normalises any VM Service URI variant to a `ws://` WebSocket URI.
@@ -287,5 +332,56 @@ class JasprRunProfileState(
     private fun addMultiValueParam(cmd: GeneralCommandLine, raw: String, flag: String) {
         raw.lines().map { it.trim() }.filter { it.isNotBlank() }
             .forEach { cmd.addParameters(flag, it) }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CompositeConsoleView — tabbed view shown in the Run tool window
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * A [ConsoleView] that delegates structural calls to [server] and can
+     * display a tabbed [JComponent] so both consoles are reachable from the
+     * Run tool window.
+     *
+     * Output is **not** forwarded here anymore — each console receives its own
+     * stream via [onOutput] / [onClientOutput] callbacks so the tabs stay clean.
+     */
+    private class CompositeConsoleView(
+        private val server: ConsoleView,
+        private val client: ConsoleView,
+    ) : ConsoleView {
+
+        private var tabbedComponent: JComponent? = null
+
+        fun setTabbedComponent(component: JComponent) {
+            tabbedComponent = component
+        }
+
+        // Route print to the server console by default (used for process-level
+        // messages such as "Process finished with exit code 0").
+        override fun print(text: String, contentType: ConsoleViewContentType) =
+            server.print(text, contentType)
+
+        override fun setOutputPaused(p0: Boolean)            = server.setOutputPaused(p0)
+        override fun isOutputPaused(): Boolean               = server.isOutputPaused()
+        override fun hasDeferredOutput(): Boolean            = server.hasDeferredOutput()
+        override fun performWhenNoDeferredOutput(p0: Runnable) = server.performWhenNoDeferredOutput(p0)
+        override fun setHelpId(p0: String)                   = server.setHelpId(p0)
+        override fun printHyperlink(p0: String, p1: HyperlinkInfo?) = server.printHyperlink(p0, p1)
+        override fun getContentSize(): Int                   = server.getContentSize()
+        override fun canPause(): Boolean                     = server.canPause()
+        override fun createConsoleActions(): Array<out AnAction?> = server.createConsoleActions()
+        override fun allowHeavyFilters()                     = server.allowHeavyFilters()
+        override fun clear()                                 = server.clear()
+        override fun addMessageFilter(filter: Filter)        = server.addMessageFilter(filter)
+        override fun getComponent()                          = tabbedComponent ?: server.component
+        override fun getPreferredFocusableComponent()        = server.preferredFocusableComponent
+        override fun scrollTo(offset: Int)                   = server.scrollTo(offset)
+        override fun attachToProcess(handler: ProcessHandler) = server.attachToProcess(handler)
+
+        override fun dispose() {
+            server.dispose()
+            client.dispose()
+        }
     }
 }

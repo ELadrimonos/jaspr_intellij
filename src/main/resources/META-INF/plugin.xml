@@ -36,6 +36,9 @@
         <codeInsight.daemonBoundCodeVisionProvider order="last"
                                                    implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprHintScopeProvider"/>
 
+        <console.folding
+                implementation="com.github.eladrimonos.jasprintellij.execution.JasprBuilderConsoleFolding"/>
+
         <postStartupActivity
                 implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
 

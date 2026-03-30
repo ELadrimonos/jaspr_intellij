@@ -18,6 +18,10 @@ import java.nio.charset.StandardCharsets
  * the JSON event stream, exposes callbacks for `server.started` and
  * `client.debugPort`, and sends `daemon.shutdown` before killing the process
  * so that child processes (Chrome, web dev server) are cleaned up properly.
+ *
+ * Output routing:
+ *  - [onOutput]       — daemon-level and server-side events  → server console
+ *  - [onClientOutput] — client-side events (client.*)        → client console
  */
 class JasprDaemonProcessHandler(
     commandLine: GeneralCommandLine,
@@ -25,6 +29,7 @@ class JasprDaemonProcessHandler(
     val onServerStarted: (vmServiceUri: String) -> Unit = {},
     val onClientDebugPort: (wsUri: String) -> Unit = {},
     val onOutput: (text: String, type: ConsoleViewContentType) -> Unit = { _, _ -> },
+    val onClientOutput: (text: String, type: ConsoleViewContentType) -> Unit = { _, _ -> },
 ) : KillableColoredProcessHandler(commandLine) {
 
     private val logger = Logger.getInstance(JasprDaemonProcessHandler::class.java)
@@ -69,6 +74,7 @@ class JasprDaemonProcessHandler(
                 return
             } catch (_: Exception) {}
         }
+        // Unstructured output is treated as server/daemon-level output
         onOutput("$line\n", ConsoleViewContentType.NORMAL_OUTPUT)
     }
 
@@ -91,9 +97,11 @@ class JasprDaemonProcessHandler(
                 onClientDebugPort(uri)
             }
             else -> {
-                // Todos los demás eventos pasan por el formatter
+                // Route client.* events to the client console; everything else to server.
+                val isClientEvent = eventName.startsWith("client.")
                 JasprConsoleFormatter.format(eventName, params).forEach { line ->
-                    onOutput(line.text + "\n", line.type)
+                    if (isClientEvent) onClientOutput(line.text + "\n", line.type)
+                    else               onOutput(line.text + "\n", line.type)
                 }
             }
         }
@@ -132,5 +140,4 @@ class JasprDaemonProcessHandler(
         Thread.sleep(1500)
         super.destroyProcess()
     }
-
 }
