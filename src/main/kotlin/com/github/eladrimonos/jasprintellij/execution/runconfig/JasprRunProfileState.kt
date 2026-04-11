@@ -20,6 +20,7 @@ import com.intellij.execution.runners.ExecutionEnvironmentBuilder
 import com.intellij.execution.runners.ProgramRunner
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
+import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
@@ -90,6 +91,9 @@ class JasprRunProfileState(
                         "   DevTools: $devToolsUrl\n",
                         ConsoleViewContentType.SYSTEM_OUTPUT,
                     )
+                    ApplicationManager.getApplication().invokeLater {
+                        BrowserUtil.open(devToolsUrl)
+                    }
                     attachServerVmDebugger(vmServiceUri)
                 }
             },
