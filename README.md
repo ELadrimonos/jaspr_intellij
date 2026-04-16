@@ -10,19 +10,27 @@
 
 ## Features
 
-**Run & Debug**
-- Runs `jaspr daemon` directly from the IDE run configuration, with full lifecycle management (graceful shutdown, Chrome cleanup).
-- Formatted run console: CLI, builder, server, and client log lines are colour-coded and separated by source.
+### 🚀 Run & Debug
+Runs `jaspr daemon` directly from the IDE run configuration, with full lifecycle management (graceful shutdown, Chrome cleanup).
+- **Formatted Console:** CLI, builder, server, and client log lines are colour-coded and separated by source.
+- ![Run Console](screenshots/run-config.gif)
 
-**Component Scopes**
-- Connects to the `jaspr tooling-daemon` in the background when a Jaspr project is opened.
-- Displays inline editor hints indicating whether a component is rendered on the server or the client.
+### 🧩 Component Scopes
+Connects to the `jaspr tooling-daemon` in the background when a Jaspr project is opened.
+- **Inlay Hints:** Displays inline editor hints indicating whether a component is rendered on the server or the client.
+- ![Component Scopes](screenshots/scopes.gif)
 
-**Project & File Templates**
-- New Project wizard for scaffolding a Jaspr app from scratch.
-- File templates for `StatelessComponent`, `StatefulComponent`, and `InheritedComponent`.
+### 🪄 HTML to Jaspr Conversion
+Instantly migrate your existing HTML templates to Jaspr components.
+- **Right-click Conversion:** Right-click any `.html` file in the project view and select "Convert to Jaspr".
+- **Auto-scaffolding:** Generates a new Dart file with the converted Jaspr code wrapped in a `StatelessComponent`.
+- ![HTML to Jaspr](screenshots/html-to-dart.gif)
 
-**Live Code Snippets**
+### 🆕 Project & File Templates
+- **New Project Wizard:** Scaffold a Jaspr app from scratch with full CLI configuration.
+- **File Templates:** Create new `StatelessComponent`, `StatefulComponent`, and `InheritedComponent` files.
+
+### ⌨️ Live Code Snippets
 - `stlessc` — new `StatelessComponent` class
 - `stfulc` — new `StatefulComponent` class
 - `inhc` — new `InheritedComponent` class
@@ -32,9 +40,12 @@
 - `jevt` — generic event handler
 - `jclick` — click event handler
 
-**Tooling**
-- Clean and Doctor commands available from the IDE.
-- Version mismatch notification when `jaspr_cli` and `pubspec.yaml` versions differ.
+### 🛠️ Tooling
+- **Maintenance:** Clean and Doctor commands available from the IDE.
+- **Daemon Status:** Check the connectivity and health of the Jaspr tooling daemon.
+- **Version Check:** Notification when `jaspr_cli` and `pubspec.yaml` versions differ.
+- **Update CLI:** Easily update the Jaspr CLI from the Tools menu.
+- **Inspections:** Detect common errors, such as multiple scope annotations on the same component.
 
 ## Roadmap
 
@@ -43,7 +54,7 @@
 - [x] New Project wizard.
 - [x] Live code snippets.
 - [x] Clean and Doctor commands.
-- [ ] Debugger attachment to server and client VM services.
+- [x] Debugger attachment to server and client VM services.
 - [x] HTML → Jaspr conversion via `jaspr tooling-daemon`.
 
 ## Installation

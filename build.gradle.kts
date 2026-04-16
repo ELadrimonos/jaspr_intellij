@@ -123,6 +123,10 @@ tasks {
     publishPlugin {
         dependsOn(patchChangelog)
     }
+
+    jar {
+        exclude("**/screenshots/**")
+    }
 }
 
 intellijPlatformTesting {

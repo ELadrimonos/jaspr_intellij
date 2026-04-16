@@ -3,18 +3,33 @@
     <id>com.github.eladrimonos.jasprintellij</id>
     <name>Jaspr</name>
     <vendor>Adrián Primo Bernat</vendor>
-    <category>Framework</category>
+    <category>Web</category>
     <description>
         <![CDATA[
     <p>Adds development support for the <a href="https://jaspr.site">Jaspr</a> framework to JetBrains IDEs.</p>
+
+    <p>Jaspr is a modern web framework for Dart that allows you to build fast, type-safe, and reactive web applications. This plugin provides first-class IDE support to streamline your development workflow.</p>
+
+    <h3>Key Features</h3>
     <ul>
-        <li><b>Run configuration</b> — runs <code>jaspr daemon</code> with graceful shutdown and Chrome lifecycle management. Colour-coded console output separated by source: CLI, builder, server, and client.</li>
-        <li><b>Component Scopes</b> — connects to <code>jaspr tooling-daemon</code> automatically on project open and shows inline editor hints indicating whether a component renders on the server or the client.</li>
-        <li><b>New Project wizard</b> — scaffolds a Jaspr app from scratch with full CLI configuration.</li>
-        <li><b>Live Templates</b> — <code>stlessc</code>, <code>stfulc</code>, <code>inhc</code>, <code>jhtml</code>, <code>jtext</code>, <code>jstyls</code>, <code>jevt</code>, <code>jclick</code>.</li>
-        <li><b>File templates</b> — StatelessComponent, StatefulComponent, InheritedComponent.</li>
-        <li><b>Tooling</b> — Clean and Doctor commands. Version mismatch notification when <code>jaspr_cli</code> and <code>pubspec.yaml</code> versions differ.</li>
+        <li><b>Run Configuration</b> — Execute <code>jaspr daemon</code> directly from the IDE with graceful shutdown and Chrome lifecycle management.
+            <br/><br/><i>(GIF demonstrating formatted console output)</i><br/>
+            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/run-config.gif" alt="Run Configuration" />
+        </li>
+        <li><b>Component Scopes (Code Vision)</b> — Inline editor hints indicate whether a component renders on the server or the client, powered by the <code>jaspr tooling-daemon</code>.
+            <br/><br/><i>(Image showing Server/Client inlay hints)</i><br/>
+            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/scopes.gif" alt="Component Scopes" />
+        </li>
+        <li><b>HTML to Jaspr Conversion</b> — Right-click any <code>.html</code> file in the project view and select <b>"Convert to Jaspr"</b> to instantly generate a corresponding Jaspr Dart component.
+            <br/><br/><i>(GIF demonstrating right-click conversion)</i><br/>
+            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/html-to-dart.gif" alt="HTML to Jaspr" />
+        </li>
+        <li><b>New Project Wizard</b> — Scaffolds a new Jaspr application from scratch with full CLI integration.</li>
+        <li><b>Live Templates & Snippets</b> — Speed up development with <code>stlessc</code>, <code>stfulc</code>, <code>jhtml</code>, <code>jtext</code>, and more.</li>
+        <li><b>Advanced Tooling</b> — Integrated <code>Clean</code> and <code>Doctor</code> commands, version mismatch notifications, and specialized console formatting.</li>
     </ul>
+
+    <p><i>Note: This plugin requires the Dart plugin and jaspr_cli to be installed.</i></p>
     ]]>
     </description>
 
