@@ -66,6 +66,16 @@
         <internalFileTemplate name="StatefulComponent.dart"/>
         <internalFileTemplate name="InheritedComponent.dart"/>
 
+        <localInspection
+                language="Dart"
+                bundle="messages.JasprBundle"
+                key="jaspr.inspection.multiple.annotations.name"
+                groupKey="jaspr.inspection.group.name"
+                enabledByDefault="true"
+                level="ERROR"
+                shortName="JasprMultipleAnnotations"
+                implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprMultipleAnnotationsInspection"/>
+
         <!--
             IntelliJ IDEA new-project wizard (File > New > Project…)
             Uses the GeneratorNewProjectWizard API — only works in IDEA.
