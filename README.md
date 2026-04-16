@@ -44,7 +44,7 @@
 - [x] Live code snippets.
 - [x] Clean and Doctor commands.
 - [ ] Debugger attachment to server and client VM services.
-- [ ] HTML → Jaspr conversion via `jaspr tooling-daemon`.
+- [x] HTML → Jaspr conversion via `jaspr tooling-daemon`.
 
 ## Installation
 
