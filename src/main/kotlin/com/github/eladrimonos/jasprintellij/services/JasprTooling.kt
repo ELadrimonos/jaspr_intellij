@@ -4,6 +4,7 @@ import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.ProcessOutput
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.options.ConfigurationException
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.EnvironmentUtil
 import java.io.File
@@ -14,6 +15,20 @@ class JasprTooling(
     private val environmentProvider: () -> Map<String, String> = { EnvironmentUtil.getEnvironmentMap() },
     private val logger: Logger = Logger.getInstance(JasprTooling::class.java),
 ) {
+    companion object {
+        fun isJasprProject(project: Project): Boolean {
+            val basePath = project.basePath ?: return false
+            val projectDir = File(basePath)
+            val pubspec = File(projectDir, "pubspec.yaml")
+            if (!pubspec.exists()) return false
+            return try {
+                pubspec.readText().contains("jaspr")
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
     private fun dartExecutable(sdkPath: String): String {
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         return File(sdkPath, "bin/$dartExeName").absolutePath
