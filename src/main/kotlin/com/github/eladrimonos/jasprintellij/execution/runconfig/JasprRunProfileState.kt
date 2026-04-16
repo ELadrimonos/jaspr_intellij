@@ -67,7 +67,6 @@ class JasprRunProfileState(
     override fun execute(executor: Executor?, runner: ProgramRunner<*>): ExecutionResult {
         processHandler = JasprDaemonProcessHandler(
             commandLine = buildCommandLine(),
-            project = project,
 
             // Daemon-level and server-side output → server console tab.
             onOutput = { text, type ->

@@ -25,7 +25,6 @@ import java.nio.charset.StandardCharsets
  */
 class JasprDaemonProcessHandler(
     commandLine: GeneralCommandLine,
-    private val project: Project,
     val onServerStarted: (vmServiceUri: String) -> Unit = {},
     val onClientDebugPort: (wsUri: String) -> Unit = {},
     val onOutput: (text: String, type: ConsoleViewContentType) -> Unit = { _, _ -> },
@@ -35,7 +34,6 @@ class JasprDaemonProcessHandler(
     private val logger = Logger.getInstance(JasprDaemonProcessHandler::class.java)
     private val gson = Gson()
     private val outputBuffer = StringBuilder()
-    private var nextId = 1
 
     init {
         addProcessListener(object : ProcessListener {
@@ -65,7 +63,7 @@ class JasprDaemonProcessHandler(
     // Daemon protocol — matches VS Code's handleData / handleEvent
     // -------------------------------------------------------------------------
 
-    private fun parseLine(line: String) {
+    internal fun parseLine(line: String) {
         if (line.startsWith("[{") && line.endsWith("}]")) {
             try {
                 @Suppress("UNCHECKED_CAST")
@@ -79,7 +77,7 @@ class JasprDaemonProcessHandler(
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun handleEvent(event: Map<String, Any>) {
+    internal fun handleEvent(event: Map<String, Any>) {
         val eventName = event["event"] as? String ?: return
         val params = event["params"] as? Map<String, Any> ?: emptyMap()
 
