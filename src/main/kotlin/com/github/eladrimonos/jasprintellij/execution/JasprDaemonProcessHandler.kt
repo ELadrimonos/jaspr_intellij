@@ -7,7 +7,6 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import java.nio.charset.StandardCharsets
 
@@ -18,19 +17,22 @@ import java.nio.charset.StandardCharsets
  * the JSON event stream, exposes callbacks for `server.started` and
  * `client.debugPort`, and sends `daemon.shutdown` before killing the process
  * so that child processes (Chrome, web dev server) are cleaned up properly.
+ *
+ * Output routing:
+ *  - [onOutput]       — daemon-level and server-side events  → server console
+ *  - [onClientOutput] — client-side events (client.*)        → client console
  */
 class JasprDaemonProcessHandler(
     commandLine: GeneralCommandLine,
-    private val project: Project,
     val onServerStarted: (vmServiceUri: String) -> Unit = {},
     val onClientDebugPort: (wsUri: String) -> Unit = {},
     val onOutput: (text: String, type: ConsoleViewContentType) -> Unit = { _, _ -> },
+    val onClientOutput: (text: String, type: ConsoleViewContentType) -> Unit = { _, _ -> },
 ) : KillableColoredProcessHandler(commandLine) {
 
     private val logger = Logger.getInstance(JasprDaemonProcessHandler::class.java)
     private val gson = Gson()
     private val outputBuffer = StringBuilder()
-    private var nextId = 1
 
     init {
         addProcessListener(object : ProcessListener {
@@ -60,7 +62,7 @@ class JasprDaemonProcessHandler(
     // Daemon protocol — matches VS Code's handleData / handleEvent
     // -------------------------------------------------------------------------
 
-    private fun parseLine(line: String) {
+    internal fun parseLine(line: String) {
         if (line.startsWith("[{") && line.endsWith("}]")) {
             try {
                 @Suppress("UNCHECKED_CAST")
@@ -69,11 +71,12 @@ class JasprDaemonProcessHandler(
                 return
             } catch (_: Exception) {}
         }
+        // Unstructured output is treated as server/daemon-level output
         onOutput("$line\n", ConsoleViewContentType.NORMAL_OUTPUT)
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun handleEvent(event: Map<String, Any>) {
+    internal fun handleEvent(event: Map<String, Any>) {
         val eventName = event["event"] as? String ?: return
         val params = event["params"] as? Map<String, Any> ?: emptyMap()
 
@@ -91,9 +94,11 @@ class JasprDaemonProcessHandler(
                 onClientDebugPort(uri)
             }
             else -> {
-                // Todos los demás eventos pasan por el formatter
+                // Route client.* events to the client console; everything else to server.
+                val isClientEvent = eventName.startsWith("client.")
                 JasprConsoleFormatter.format(eventName, params).forEach { line ->
-                    onOutput(line.text + "\n", line.type)
+                    if (isClientEvent) onClientOutput(line.text + "\n", line.type)
+                    else               onOutput(line.text + "\n", line.type)
                 }
             }
         }
@@ -132,5 +137,4 @@ class JasprDaemonProcessHandler(
         Thread.sleep(1500)
         super.destroyProcess()
     }
-
 }
