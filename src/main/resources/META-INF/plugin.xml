@@ -1,35 +1,34 @@
-<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.eladrimonos.jasprintellij</id>
-    <name>Jaspr</name>
+    <name>Jaspr | Dart Web Framework</name>
     <vendor>Adrián Primo Bernat</vendor>
-    <category>Web</category>
+
     <description>
         <![CDATA[
-    <p>Adds development support for the <a href="https://jaspr.site">Jaspr</a> framework to JetBrains IDEs.</p>
+<p>Adds <a href="https://jaspr.site">Jaspr</a> framework support to JetBrains IDEs.</p>
 
-    <p>Jaspr is a modern web framework for Dart that allows you to build fast, type-safe, and reactive web applications. This plugin provides first-class IDE support to streamline your development workflow.</p>
+<p>Jaspr is a web framework for Dart that lets you build type-safe, reactive web applications.
+This plugin integrates the Jaspr toolchain directly into your IDE.</p>
 
-    <h3>Key Features</h3>
-    <ul>
-        <li><b>Run Configuration</b> — Execute <code>jaspr daemon</code> directly from the IDE with graceful shutdown and Chrome lifecycle management.
-            <br/><br/><i>(GIF demonstrating formatted console output)</i><br/>
-            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/run-config.gif" alt="Run Configuration" />
-        </li>
-        <li><b>Component Scopes (Code Vision)</b> — Inline editor hints indicate whether a component renders on the server or the client, powered by the <code>jaspr tooling-daemon</code>.
-            <br/><br/><i>(Image showing Server/Client inlay hints)</i><br/>
-            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/scopes.gif" alt="Component Scopes" />
-        </li>
-        <li><b>HTML to Jaspr Conversion</b> — Right-click any <code>.html</code> file in the project view and select <b>"Convert to Jaspr"</b> to instantly generate a corresponding Jaspr Dart component.
-            <br/><br/><i>(GIF demonstrating right-click conversion)</i><br/>
-            <img src="https://raw.githubusercontent.com/ELadrimonos/jasprintellij/main/screenshots/html-to-dart.gif" alt="HTML to Jaspr" />
-        </li>
-        <li><b>New Project Wizard</b> — Scaffolds a new Jaspr application from scratch with full CLI integration.</li>
-        <li><b>Live Templates & Snippets</b> — Speed up development with <code>stlessc</code>, <code>stfulc</code>, <code>jhtml</code>, <code>jtext</code>, and more.</li>
-        <li><b>Advanced Tooling</b> — Integrated <code>Clean</code> and <code>Doctor</code> commands, version mismatch notifications, and specialized console formatting.</li>
-    </ul>
+<p><i>Requires the Dart plugin and jaspr_cli.</i></p>
 
-    <p><i>Note: This plugin requires the Dart plugin and jaspr_cli to be installed.</i></p>
+<h3>Run Configuration</h3>
+<p>Run <code>jaspr daemon</code> directly from the IDE with graceful shutdown and Chrome lifecycle management.</p>
+
+<h3>Component Scopes</h3>
+<p>Inline code vision hints show whether a component renders on the server or the client, powered by the <code>jaspr tooling-daemon</code>.</p>
+
+<h3>HTML to Jaspr Conversion</h3>
+<p>Right-click any <code>.html</code> file and select <b>Convert to Jaspr</b> to generate the equivalent Dart component.</p>
+
+<h3>New Project Wizard</h3>
+<p>Create a new Jaspr project from scratch using the IDE's project wizard with full CLI integration.</p>
+
+<h3>Live Templates</h3>
+<p>Built-in templates for common patterns: <code>stlessc</code>, <code>stfulc</code>, <code>jhtml</code>, <code>jtext</code>, and more.</p>
+
+<h3>Advanced Tooling</h3>
+<p>Run <code>jaspr clean</code> and <code>jaspr doctor</code> from the Tools menu. Includes version mismatch notifications and console output formatting.</p>
     ]]>
     </description>
 
@@ -91,18 +90,9 @@
                 shortName="JasprMultipleAnnotations"
                 implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprMultipleAnnotationsInspection"/>
 
-        <!--
-            IntelliJ IDEA new-project wizard (File > New > Project…)
-            Uses the GeneratorNewProjectWizard API — only works in IDEA.
-        -->
         <newProjectWizard.generator
                 implementation="com.github.eladrimonos.jasprintellij.template.project.JasprNewProjectWizard"/>
 
-        <!--
-            WebStorm / GoLand / Rider / other small IDEs.
-            Shows up on the Welcome screen and in File > New > Project…
-            Uses WebProjectTemplate (DirectoryProjectGenerator).
-        -->
         <directoryProjectGenerator
                 implementation="com.github.eladrimonos.jasprintellij.template.project.JasprDirectoryProjectGenerator"/>
 
