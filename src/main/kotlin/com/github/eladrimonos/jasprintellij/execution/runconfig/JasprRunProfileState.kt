@@ -24,6 +24,7 @@ import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBTabbedPane
@@ -239,7 +240,7 @@ class JasprRunProfileState(
                 .getDeclaredField("VM_SERVICE_URI_KEY")
                 .also { it.isAccessible = true }
             @Suppress("UNCHECKED_CAST")
-            val key = keyField.get(null) as? com.intellij.openapi.util.Key<String> ?: return
+            val key = keyField.get(null) as? Key<String> ?: return
             environment.putUserData(key, wsUri)
             logger.debug("Stored VM service URI in environment user data: $wsUri")
         }.onFailure {
@@ -345,9 +346,6 @@ class JasprRunProfileState(
      * A [ConsoleView] that delegates structural calls to [server] and can
      * display a tabbed [JComponent] so both consoles are reachable from the
      * Run tool window.
-     *
-     * Output is **not** forwarded here anymore — each console receives its own
-     * stream via [onOutput] / [onClientOutput] callbacks so the tabs stay clean.
      */
     private class CompositeConsoleView(
         private val server: ConsoleView,
@@ -378,7 +376,7 @@ class JasprRunProfileState(
         override fun clear()                                 = server.clear()
         override fun addMessageFilter(filter: Filter)        = server.addMessageFilter(filter)
         override fun getComponent()                          = tabbedComponent ?: server.component
-        override fun getPreferredFocusableComponent()        = server.preferredFocusableComponent
+        override fun getPreferredFocusableComponent(): JComponent? = server.preferredFocusableComponent
         override fun scrollTo(offset: Int)                   = server.scrollTo(offset)
         override fun attachToProcess(handler: ProcessHandler) = server.attachToProcess(handler)
 
