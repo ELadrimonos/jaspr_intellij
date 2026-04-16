@@ -36,6 +36,9 @@
         <codeInsight.daemonBoundCodeVisionProvider order="last"
                                                    implementation="com.github.eladrimonos.jasprintellij.editor.codevision.JasprHintScopeProvider"/>
 
+        <console.folding
+                implementation="com.github.eladrimonos.jasprintellij.execution.JasprBuilderConsoleFolding"/>
+
         <postStartupActivity
                 implementation="com.github.eladrimonos.jasprintellij.startup.JasprProjectActivity"/>
 
@@ -62,6 +65,16 @@
         <internalFileTemplate name="StatelessComponent.dart"/>
         <internalFileTemplate name="StatefulComponent.dart"/>
         <internalFileTemplate name="InheritedComponent.dart"/>
+
+        <localInspection
+                language="Dart"
+                bundle="messages.JasprBundle"
+                key="jaspr.inspection.multiple.annotations.name"
+                groupKey="jaspr.inspection.group.name"
+                enabledByDefault="true"
+                level="ERROR"
+                shortName="JasprMultipleAnnotations"
+                implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprMultipleAnnotationsInspection"/>
 
         <!--
             IntelliJ IDEA new-project wizard (File > New > Project…)
