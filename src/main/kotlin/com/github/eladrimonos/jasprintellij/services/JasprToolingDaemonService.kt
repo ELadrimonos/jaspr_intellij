@@ -1,6 +1,8 @@
 package com.github.eladrimonos.jasprintellij.services
 
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
+import com.github.eladrimonos.jasprintellij.icons.JasprIcons
+import com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
@@ -28,25 +30,32 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     var daemonVersion: String? = null
     var daemonPid: Long? = null
+    var cliVersion: String? = null
 
     private var nextId = 1
     private val pendingRequests = mutableMapOf<Int, CompletableFuture<Any?>>()
     private val fileScopes = mutableMapOf<String, FileComponentScopes>()
     private val outputBuffer = StringBuilder()
 
+    private var useFileSystemScopes = false
+    private var scopesFileWatcher: com.intellij.openapi.vfs.VirtualFileListener? = null
+
     val isAlive: Boolean
-        get() = processHandler?.isProcessTerminated == false
+        get() = useFileSystemScopes || (processHandler?.isProcessTerminated == false)
 
     fun start() {
         if (isAlive) return
 
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return
-
         val tooling = JasprTooling()
-        try {
-            tooling.preflightCheck(sdkPath)
-        } catch (e: Exception) {
-            logger.warn("Jaspr Tooling Daemon: preflight check failed. ${e.message}")
+
+        cliVersion = tooling.readJasprCliVersion(sdkPath)
+        logger.info("Jaspr Tooling: cliVersion=$cliVersion")
+
+        if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
+            logger.info("Jaspr Tooling: using file-system scopes for version >= 0.23.0")
+            useFileSystemScopes = true
+            setupScopesFileWatcher()
             return
         }
 
@@ -104,11 +113,65 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    private fun setupScopesFileWatcher() {
+        val basePath = project.basePath ?: return
+        val scopesFile = File(basePath, ".dart_tool/jaspr/scopes.json")
+        
+        // Initial load
+        if (scopesFile.exists()) {
+            loadScopesFromFile(scopesFile)
+        }
+
+        val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByIoFile(scopesFile)
+        if (virtualFile != null) {
+            scopesFileWatcher = object : com.intellij.openapi.vfs.VirtualFileListener {
+                override fun contentsChanged(event: com.intellij.openapi.vfs.VirtualFileEvent) {
+                    if (event.file == virtualFile) {
+                        loadScopesFromFile(scopesFile)
+                    }
+                }
+            }
+            virtualFile.fileSystem.addVirtualFileListener(scopesFileWatcher!!)
+        } else {
+            // If the file doesn't exist yet, we might need to watch the directory
+            val dartToolDir = File(basePath, ".dart_tool/jaspr")
+            val dirVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByIoFile(dartToolDir)
+            if (dirVirtualFile != null) {
+                scopesFileWatcher = object : com.intellij.openapi.vfs.VirtualFileListener {
+                    override fun fileCreated(event: com.intellij.openapi.vfs.VirtualFileEvent) {
+                        if (event.file.name == "scopes.json") {
+                            loadScopesFromFile(scopesFile)
+                        }
+                    }
+                }
+                dirVirtualFile.fileSystem.addVirtualFileListener(scopesFileWatcher!!)
+            }
+        }
+    }
+
+    private fun loadScopesFromFile(file: File) {
+        try {
+            val content = file.readText(StandardCharsets.UTF_8)
+            val type = object : TypeToken<Map<String, Any>>() {}.type
+            val data: Map<String, Any> = gson.fromJson(content, type)
+            handleScopesResultEvent(data)
+        } catch (e: Exception) {
+            logger.warn("Failed to load scopes from file: ${e.message}")
+        }
+    }
+
     // -------------------------------------------------------------------------
     // HTML conversion
     // -------------------------------------------------------------------------
 
     fun convertHtml(html: String): String? {
+        val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return null
+        val tooling = JasprTooling()
+        
+        if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
+            return convertHtmlViaCli(sdkPath, html)
+        }
+
         if (!isAlive) return null
 
         val id = nextId++
@@ -128,6 +191,24 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             pendingRequests.remove(id)
             null
         }
+    }
+
+    private fun convertHtmlViaCli(sdkPath: String, html: String): String? {
+        val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
+        val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
+
+        val cmd = GeneralCommandLine()
+            .withExePath(dartExe)
+            .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "convert-html", "--html", html)
+            .withCharset(StandardCharsets.UTF_8)
+            .withWorkDirectory(project.basePath)
+
+        val out = DefaultCliRunner.run(cmd)
+        if (out.exitCode != 0) {
+            logger.warn("Jaspr CLI convert-html failed: ${out.stderr}")
+            return null
+        }
+        return out.stdout.trim()
     }
 
     // -------------------------------------------------------------------------
@@ -289,6 +370,10 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         processHandler?.let {
             if (!it.isProcessTerminated) it.destroyProcess()
             processHandler = null
+        }
+        scopesFileWatcher?.let { watcher ->
+            com.intellij.openapi.vfs.LocalFileSystem.getInstance().removeVirtualFileListener(watcher)
+            scopesFileWatcher = null
         }
     }
 

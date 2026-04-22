@@ -58,8 +58,8 @@ class ConvertHtmlToJasprAction : AnAction() {
                 logger.info("ConvertHtmlToJaspr: daemon=$daemon, isAlive=${daemon?.isAlive}")
 
                 if (daemon == null || !daemon.isAlive) {
-                    logger.warn("ConvertHtmlToJaspr: daemon is not running")
-                    notifyError(project, "Jaspr tooling daemon is not running.")
+                    logger.warn("ConvertHtmlToJaspr: Jaspr tooling is not active")
+                    notifyError(project, "Jaspr tooling is not active. Check that jaspr_cli is installed and the project is initialized.")
                     return
                 }
 

@@ -1,11 +1,19 @@
 package com.github.eladrimonos.jasprintellij.template.project
 
+import com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction
 import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationSetup
+import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.module.JasprModuleConfigurator
+import com.github.eladrimonos.jasprintellij.services.JasprCliMissingException
 import com.github.eladrimonos.jasprintellij.services.JasprProjectCreator
+import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.NewProjectWizardStep
+import com.intellij.notification.NotificationAction
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
+import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.progress.ProgressManager
@@ -72,7 +80,35 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
 
             ProgressManager.getInstance().runProcessWithProgressSynchronously(
                 {
-                    creator.preflightCheck(sdkPath)
+                    try {
+                        creator.preflightCheck(sdkPath)
+                    } catch (e: JasprCliMissingException) {
+                        ApplicationManager.getApplication().invokeLater {
+                            val notification = NotificationGroupManager.getInstance()
+                                .getNotificationGroup("JasprIntelliJ")
+                                .createNotification(
+                                    "Jaspr Tooling Error",
+                                    "Preflight check failed: ${e.message?.substringBefore("\n") ?: "Unknown error"}",
+                                    NotificationType.ERROR
+                                )
+                                .setIcon(JasprIcons.JasprLogo)
+
+                            notification.addAction(NotificationAction.create("Install jaspr_cli") { _, notification ->
+                                JasprUpdateCliAction().runAction(project) {
+                                    // Optionally start daemon here too if needed, though usually new project 
+                                    // creation will trigger its own start later.
+                                    ApplicationManager.getApplication().executeOnPooledThread {
+                                        project.getService(JasprToolingDaemonService::class.java)?.start()
+                                    }
+                                }
+                                notification.expire()
+                            })
+
+                            notification.notify(project)
+                        }
+                        throw e
+                    }
+
                     creator.create(projectDir = projectDir, sdkPath = sdkPath, options = panel.toCreatorOptions())
 
                     // addIfNeeded does I/O — keep it here on the background thread.

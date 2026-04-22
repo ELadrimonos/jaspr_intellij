@@ -21,6 +21,9 @@ import com.intellij.openapi.util.SystemInfo
 import java.io.File
 import java.nio.charset.StandardCharsets
 
+import com.intellij.execution.process.ProcessAdapter
+import com.intellij.execution.process.ProcessEvent
+
 abstract class JasprTerminalAction(
     private val actionTitle: String,
     private val jasprArgs: List<String>,
@@ -29,6 +32,10 @@ abstract class JasprTerminalAction(
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
+        runAction(project)
+    }
+
+    fun runAction(project: Project, onFinished: (() -> Unit)? = null) {
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: run {
             notifyError(project)
             return
@@ -51,6 +58,16 @@ abstract class JasprTerminalAction(
 
         val processHandler = KillableColoredProcessHandler(cmd)
         ProcessTerminatedListener.attach(processHandler)
+
+        if (onFinished != null) {
+            processHandler.addProcessListener(object : ProcessAdapter() {
+                override fun processTerminated(event: ProcessEvent) {
+                    if (event.exitCode == 0) {
+                        onFinished()
+                    }
+                }
+            })
+        }
 
         val executor: Executor = DefaultRunExecutor.getRunExecutorInstance()
         val consoleView: ConsoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).console
