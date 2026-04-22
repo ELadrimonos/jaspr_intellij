@@ -73,7 +73,7 @@ class ConvertHtmlToJasprAction : AnAction() {
                 val htmlToConvert = extractBodyContent(html)
                 logger.info("ConvertHtmlToJaspr: sending to daemon, length=${htmlToConvert.length}, preview=${htmlToConvert.take(200)}")
 
-                val dartCode = daemon.convertHtml(htmlToConvert)
+                val dartCode = daemon.convertHtml(htmlToConvert, file.path)
                 logger.info("ConvertHtmlToJaspr: dartCode=${dartCode?.take(300) ?: "NULL"}")
 
                 if (dartCode == null) {

@@ -1,8 +1,7 @@
 package com.github.eladrimonos.jasprintellij.services
 
+import com.github.eladrimonos.jasprintellij.JasprLegacy
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
-import com.github.eladrimonos.jasprintellij.icons.JasprIcons
-import com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
@@ -25,16 +24,28 @@ import java.util.concurrent.TimeUnit
 @Service(Service.Level.PROJECT)
 class JasprToolingDaemonService(private val project: Project) : Disposable {
     private val logger = Logger.getInstance(JasprToolingDaemonService::class.java)
-    private var processHandler: KillableColoredProcessHandler? = null
     private val gson = Gson()
 
+    @JasprLegacy("Daemon process handler", "0.23.0")
+    private var processHandler: KillableColoredProcessHandler? = null
+
+    @JasprLegacy("Daemon version", "0.23.0")
     var daemonVersion: String? = null
+
+    @JasprLegacy("Daemon PID", "0.23.0")
     var daemonPid: Long? = null
+
     var cliVersion: String? = null
 
+    @JasprLegacy("Request ID", "0.23.0")
     private var nextId = 1
+
+    @JasprLegacy("Pending requests map", "0.23.0")
     private val pendingRequests = mutableMapOf<Int, CompletableFuture<Any?>>()
+    
     private val fileScopes = mutableMapOf<String, FileComponentScopes>()
+
+    @JasprLegacy("Output buffer for daemon stream", "0.23.0")
     private val outputBuffer = StringBuilder()
 
     private var useFileSystemScopes = false
@@ -164,12 +175,12 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     // HTML conversion
     // -------------------------------------------------------------------------
 
-    fun convertHtml(html: String): String? {
+    fun convertHtml(html: String, filePath: String? = null): String? {
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return null
         val tooling = JasprTooling()
         
         if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
-            return convertHtmlViaCli(sdkPath, html)
+            return convertHtmlViaCli(sdkPath, html, filePath)
         }
 
         if (!isAlive) return null
@@ -193,13 +204,22 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
-    private fun convertHtmlViaCli(sdkPath: String, html: String): String? {
+    private fun convertHtmlViaCli(sdkPath: String, html: String, filePath: String?): String? {
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
+        val params = mutableListOf("pub", "global", "run", "jaspr_cli:jaspr", "convert-html")
+        if (filePath != null) {
+            params.add("--file")
+            params.add(filePath)
+        } else {
+            params.add("--html")
+            params.add(html)
+        }
+
         val cmd = GeneralCommandLine()
             .withExePath(dartExe)
-            .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "convert-html", "--html", html)
+            .withParameters(params)
             .withCharset(StandardCharsets.UTF_8)
             .withWorkDirectory(project.basePath)
 
@@ -212,9 +232,10 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     }
 
     // -------------------------------------------------------------------------
-    // Message handling
+    // Message handling (Legacy)
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon message processing", "0.23.0")
     private fun processDaemonMessage(text: String) {
         try {
             if (text.startsWith("[")) {
@@ -230,6 +251,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    @JasprLegacy("Legacy daemon message handling", "0.23.0")
     private fun handleMessage(message: DaemonMessage) {
         // Response to a pending request (has id, no event)
         if (message.id != null && message.event == null) {
@@ -246,6 +268,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    @JasprLegacy("Legacy daemon connected event handler", "0.23.0")
     private fun handleConnectedEvent(params: Map<String, Any>?) {
         daemonVersion = params?.get("version") as? String
         daemonPid = (params?.get("pid") as? Double)?.toLong()
@@ -253,6 +276,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         sendRegisterCommand()
     }
 
+    @JasprLegacy("Legacy daemon scope registration", "0.23.0")
     private fun sendRegisterCommand() {
         val basePath = project.basePath ?: return
         sendCommand(mapOf(
@@ -342,6 +366,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     // Utilities
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon command transmission", "0.23.0")
     private fun sendCommand(command: Any) {
         val json = gson.toJson(listOf(command))
         logger.debug("Sending command to Jaspr Daemon: $json")
@@ -381,6 +406,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     // Data classes
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon message format", "0.23.0")
     private data class DaemonMessage(
         val id: Int? = null,
         val event: String? = null,
