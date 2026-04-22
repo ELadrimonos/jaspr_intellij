@@ -1,4 +1,13 @@
-# jaspr_intellij Changelog
+# Changelog
+
+## [Unreleased]
+### Added
+- Introduced `JasprLegacy` annotation to isolate legacy daemon-based functionality.
+
+### Changed
+- Updated compatibility with Jaspr 0.23.0.
+- Switched HTML conversion to CLI-based implementation for Jaspr >= 0.23.0.
+- Maintained backward compatibility with pre-0.23.0 versions using the tooling daemon.
 
 ## [1.0.0] - 2026-04-16
 ### Added
