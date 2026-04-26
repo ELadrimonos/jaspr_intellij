@@ -48,7 +48,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     @JasprLegacy("Output buffer for daemon stream", "0.23.0")
     private val outputBuffer = StringBuilder()
 
-    private var useFileSystemScopes = false
+    internal var useFileSystemScopes = false
     private var watchThread: Thread? = null
     private var scopesFileLastModified: Long = 0
 
@@ -74,11 +74,18 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
+        val basePath = project.basePath
+        if (basePath == null || !File(basePath).isDirectory) {
+            logger.warn("Jaspr Tooling: project base path is missing or invalid ($basePath). Cannot start daemon.")
+            return
+        }
+
         val cmd = GeneralCommandLine()
             .withExePath(dartExe)
             .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "tooling-daemon")
             .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(project.basePath)
+            .withWorkDirectory(basePath)
+
 
         try {
             val handler = KillableColoredProcessHandler(cmd)
@@ -252,7 +259,8 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             params.add(filePath)
         } else {
             params.add("--html")
-            params.add(html)
+            // The CLI expects the HTML string to be JSON-encoded
+            params.add(gson.toJson(html))
         }
 
         val cmd = GeneralCommandLine()
@@ -424,6 +432,14 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
         watchThread?.interrupt()
         watchThread = null
+        
+        // Reset state for clean restarts (important for tests and SDK changes)
+        useFileSystemScopes = false
+        cliVersion = null
+        daemonVersion = null
+        daemonPid = null
+        fileScopes.clear()
+        synchronized(outputBuffer) { outputBuffer.setLength(0) }
     }
 
     // -------------------------------------------------------------------------

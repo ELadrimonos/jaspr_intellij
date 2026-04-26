@@ -3,6 +3,7 @@
 ## [Unreleased]
 ### Added
 - Introduced `JasprLegacy` annotation to isolate legacy daemon-based functionality.
+- Updated tests to support Jaspr 0.22.4 and 0.23.0.
 
 ### Changed
 - Updated compatibility with Jaspr 0.23.0.
