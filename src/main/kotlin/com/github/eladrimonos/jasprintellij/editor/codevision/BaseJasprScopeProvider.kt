@@ -20,7 +20,6 @@ import com.jetbrains.lang.dart.psi.DartClassDefinition
 import java.awt.event.MouseEvent
 import java.net.URI
 
-@JasprLegacy("Use new component scope implementation", "0.23.0")
 abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
 
     override val groupId: String = "jaspr.component.scopes"

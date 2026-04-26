@@ -49,7 +49,8 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     private val outputBuffer = StringBuilder()
 
     private var useFileSystemScopes = false
-    private var scopesFileWatcher: com.intellij.openapi.vfs.VirtualFileListener? = null
+    private var watchThread: Thread? = null
+    private var scopesFileLastModified: Long = 0
 
     val isAlive: Boolean
         get() = useFileSystemScopes || (processHandler?.isProcessTerminated == false)
@@ -130,32 +131,30 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         
         // Initial load
         if (scopesFile.exists()) {
+            scopesFileLastModified = scopesFile.lastModified()
             loadScopesFromFile(scopesFile)
         }
 
-        val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByIoFile(scopesFile)
-        if (virtualFile != null) {
-            scopesFileWatcher = object : com.intellij.openapi.vfs.VirtualFileListener {
-                override fun contentsChanged(event: com.intellij.openapi.vfs.VirtualFileEvent) {
-                    if (event.file == virtualFile) {
-                        loadScopesFromFile(scopesFile)
-                    }
-                }
-            }
-            virtualFile.fileSystem.addVirtualFileListener(scopesFileWatcher!!)
-        } else {
-            // If the file doesn't exist yet, we might need to watch the directory
-            val dartToolDir = File(basePath, ".dart_tool/jaspr")
-            val dirVirtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance().refreshAndFindFileByIoFile(dartToolDir)
-            if (dirVirtualFile != null) {
-                scopesFileWatcher = object : com.intellij.openapi.vfs.VirtualFileListener {
-                    override fun fileCreated(event: com.intellij.openapi.vfs.VirtualFileEvent) {
-                        if (event.file.name == "scopes.json") {
+        watchThread = kotlin.concurrent.thread(isDaemon = true, name = "JasprScopesWatcher") {
+            try {
+                while (!Thread.currentThread().isInterrupted) {
+                    Thread.sleep(2000)
+                    if (scopesFile.exists()) {
+                        val currentModified = scopesFile.lastModified()
+                        if (currentModified > scopesFileLastModified) {
+                            scopesFileLastModified = currentModified
                             loadScopesFromFile(scopesFile)
+                        }
+                    } else {
+                        if (scopesFileLastModified > 0) {
+                            scopesFileLastModified = 0
+                            fileScopes.clear()
+                            ApplicationManager.getApplication().invokeLater { refreshHintsForOpenFiles() }
                         }
                     }
                 }
-                dirVirtualFile.fileSystem.addVirtualFileListener(scopesFileWatcher!!)
+            } catch (e: InterruptedException) {
+                // Thread interrupted, exit gracefully
             }
         }
     }
@@ -165,7 +164,46 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             val content = file.readText(StandardCharsets.UTF_8)
             val type = object : TypeToken<Map<String, Any>>() {}.type
             val data: Map<String, Any> = gson.fromJson(content, type)
-            handleScopesResultEvent(data)
+
+            val locationsRaw = data["locations"] as? Map<String, Any> ?: emptyMap()
+            val scopesRaw = data["scopes"] as? Map<String, Any> ?: emptyMap()
+
+            val locations = locationsRaw.mapValues { (_, value) ->
+                val map = value as? Map<String, Any> ?: emptyMap()
+                val path = map["path"] as? String ?: ""
+                ScopeLocation(
+                    path = normalizePath(path),
+                    name = map["name"] as? String ?: "",
+                    line = (map["line"] as? Double)?.toInt() ?: 0,
+                    char = (map["char"] as? Double)?.toInt() ?: 0,
+                    length = (map["length"] as? Double)?.toInt() ?: 0
+                )
+            }
+
+            fileScopes.clear()
+
+            for ((rawPath, scopeData) in scopesRaw) {
+                val filePath = normalizePath(rawPath)
+                val map = scopeData as? Map<String, Any> ?: continue
+
+                val componentIds = (map["components"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                val serverRootIds = (map["serverScopeRoots"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                val clientRootIds = (map["clientScopeRoots"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+                val componentNames = componentIds.mapNotNull { locations[it]?.name }
+                val serverTargets = serverRootIds.mapNotNull { locations[it]?.toScopeTarget() }
+                val clientTargets = clientRootIds.mapNotNull { locations[it]?.toScopeTarget() }
+
+                fileScopes[filePath] = FileComponentScopes(
+                    components = componentNames,
+                    serverScopeRoots = serverTargets,
+                    clientScopeRoots = clientTargets
+                )
+            }
+
+            ApplicationManager.getApplication().invokeLater {
+                refreshHintsForOpenFiles()
+            }
         } catch (e: Exception) {
             logger.warn("Failed to load scopes from file: ${e.message}")
         }
@@ -301,24 +339,12 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     fun refreshHintsForOpenFiles() {
         if (project.isDisposed) return
-        val fileEditorManager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
-        val psiManager = com.intellij.psi.PsiManager.getInstance(project)
-        val analyzer = DaemonCodeAnalyzer.getInstance(project)
-
-        val openFiles = fileEditorManager.openFiles.filter { it.extension == "dart" }
-        if (openFiles.isEmpty()) return
-
-        for (vFile in openFiles) {
-            ApplicationManager.getApplication().runReadAction {
-                val psiFile = psiManager.findFile(vFile)
-                if (psiFile != null && psiFile.isValid) analyzer.restart(psiFile)
+        
+        // Lightweight restart of the Daemon analyzer to trigger CodeVision updates
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                DaemonCodeAnalyzer.getInstance(project).restart()
             }
-        }
-
-        try {
-            com.intellij.util.FileContentUtil.reparseFiles(project, openFiles, true)
-        } catch (e: Exception) {
-            logger.warn("JASPR DAEMON: FileContentUtil.reparseFiles failed: ${e.message}")
         }
     }
 
@@ -396,10 +422,8 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             if (!it.isProcessTerminated) it.destroyProcess()
             processHandler = null
         }
-        scopesFileWatcher?.let { watcher ->
-            com.intellij.openapi.vfs.LocalFileSystem.getInstance().removeVirtualFileListener(watcher)
-            scopesFileWatcher = null
-        }
+        watchThread?.interrupt()
+        watchThread = null
     }
 
     // -------------------------------------------------------------------------
@@ -434,4 +458,20 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         val character: Int,
         val url: String? = null,
     )
+
+    data class ScopeLocation(
+        val path: String,
+        val name: String,
+        val line: Int,
+        val char: Int,
+        val length: Int
+    ) {
+        fun toScopeTarget(): ScopeTarget {
+            return ScopeTarget(
+                path = path,
+                line = line,
+                character = char
+            )
+        }
+    }
 }
