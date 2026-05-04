@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [1.1.0] - 2026-05-04
 ### Added
 - Introduced `JasprLegacy` annotation to isolate legacy daemon-based functionality.
 - Updated tests to support Jaspr 0.22.4 and 0.23.0.
