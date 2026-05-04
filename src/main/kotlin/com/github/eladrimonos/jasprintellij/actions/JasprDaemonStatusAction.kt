@@ -7,16 +7,19 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 
-// TODO Remove for release or show only on plugin debug
 class JasprDaemonStatusAction : AnAction() {
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
         val daemonService = project.getService(JasprToolingDaemonService::class.java) ?: return
 
         val statusText = if (daemonService.isAlive) {
-            "Jaspr Tooling Daemon is <b>RUNNING</b> (PID: ${daemonService.daemonPid ?: "Unknown"}, Version: ${daemonService.daemonVersion ?: "Unknown"})"
+            if (daemonService.cliVersion != null && daemonService.daemonPid == null) {
+                "Jaspr Tooling is <b>ACTIVE</b> (CLI Version: ${daemonService.cliVersion}, Mode: File-system scopes)"
+            } else {
+                "Jaspr Tooling Daemon is <b>RUNNING</b> (PID: ${daemonService.daemonPid ?: "Unknown"}, Version: ${daemonService.daemonVersion ?: "Unknown"})"
+            }
         } else {
-            "Jaspr Tooling Daemon is <b>STOPPED</b>."
+            "Jaspr Tooling is <b>STOPPED</b>."
         }
 
         NotificationGroupManager.getInstance()

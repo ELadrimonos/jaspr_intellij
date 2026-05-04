@@ -10,6 +10,8 @@ import com.intellij.util.EnvironmentUtil
 import java.io.File
 import java.nio.charset.StandardCharsets
 
+class JasprCliMissingException(message: String) : ConfigurationException(message)
+
 class JasprTooling(
     private val cliRunner: CliRunner = DefaultCliRunner,
     private val environmentProvider: () -> Map<String, String> = { EnvironmentUtil.getEnvironmentMap() },
@@ -37,7 +39,7 @@ class JasprTooling(
     fun preflightCheck(sdkPath: String) {
         val dartExe = dartExecutable(sdkPath)
 
-        fun runOrThrow(vararg args: String, hint: String) {
+        fun runOrThrow(vararg args: String, hint: String, isCliCheck: Boolean = false) {
             val cmd = GeneralCommandLine()
                 .withExePath(dartExe)
                 .withParameters(*args)
@@ -46,14 +48,18 @@ class JasprTooling(
 
             val out = cliRunner.run(cmd)
             if (out.exitCode != 0) {
-                throw ConfigurationException(
-                    buildString {
-                        appendLine(hint)
-                        appendLine("Command: dart ${args.joinToString(" ")}")
-                        if (out.stderr.isNotBlank()) appendLine("stderr:\n${out.stderr}")
-                        if (out.stdout.isNotBlank()) appendLine("stdout:\n${out.stdout}")
-                    }.trim()
-                )
+                val message = buildString {
+                    appendLine(hint)
+                    appendLine("Command: dart ${args.joinToString(" ")}")
+                    if (out.stderr.isNotBlank()) appendLine("stderr:\n${out.stderr}")
+                    if (out.stdout.isNotBlank()) appendLine("stdout:\n${out.stdout}")
+                }.trim()
+
+                if (isCliCheck) {
+                    throw JasprCliMissingException(message)
+                } else {
+                    throw ConfigurationException(message)
+                }
             }
         }
 
@@ -62,7 +68,8 @@ class JasprTooling(
         runOrThrow(
             "pub", "global", "run", "jaspr_cli:jaspr", "--version",
             hint = "Could not find jaspr_cli via 'dart pub global run'. " +
-                    "Install it with: dart pub global activate jaspr_cli (network access is required the first time)."
+                    "Install it with: dart pub global activate jaspr_cli (network access is required the first time).",
+            isCliCheck = true
         )
     }
 
@@ -124,5 +131,19 @@ class JasprTooling(
         // If you need pre-release awareness, extend it.
         val m = Regex("""\b(\d+\.\d+\.\d+)\b""").find(text) ?: return null
         return m.groupValues.getOrNull(1)
+    }
+
+    fun isVersionAtLeast(current: String?, target: String): Boolean {
+        if (current == null) return false
+        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
+        val targetParts = target.split(".").mapNotNull { it.toIntOrNull() }
+
+        for (i in 0 until maxOf(currentParts.size, targetParts.size)) {
+            val c = currentParts.getOrElse(i) { 0 }
+            val t = targetParts.getOrElse(i) { 0 }
+            if (c > t) return true
+            if (c < t) return false
+        }
+        return true
     }
 }

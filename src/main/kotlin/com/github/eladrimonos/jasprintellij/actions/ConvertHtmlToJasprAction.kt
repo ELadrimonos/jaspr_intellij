@@ -58,8 +58,8 @@ class ConvertHtmlToJasprAction : AnAction() {
                 logger.info("ConvertHtmlToJaspr: daemon=$daemon, isAlive=${daemon?.isAlive}")
 
                 if (daemon == null || !daemon.isAlive) {
-                    logger.warn("ConvertHtmlToJaspr: daemon is not running")
-                    notifyError(project, "Jaspr tooling daemon is not running.")
+                    logger.warn("ConvertHtmlToJaspr: Jaspr tooling is not active")
+                    notifyError(project, "Jaspr tooling is not active. Check that jaspr_cli is installed and the project is initialized.")
                     return
                 }
 
@@ -73,7 +73,7 @@ class ConvertHtmlToJasprAction : AnAction() {
                 val htmlToConvert = extractBodyContent(html)
                 logger.info("ConvertHtmlToJaspr: sending to daemon, length=${htmlToConvert.length}, preview=${htmlToConvert.take(200)}")
 
-                val dartCode = daemon.convertHtml(htmlToConvert)
+                val dartCode = daemon.convertHtml(htmlToConvert, file.path)
                 logger.info("ConvertHtmlToJaspr: dartCode=${dartCode?.take(300) ?: "NULL"}")
 
                 if (dartCode == null) {

@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.services
 
+import com.github.eladrimonos.jasprintellij.JasprLegacy
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -11,9 +12,11 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.psi.PsiManager
 import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -23,41 +26,68 @@ import java.util.concurrent.TimeUnit
 @Service(Service.Level.PROJECT)
 class JasprToolingDaemonService(private val project: Project) : Disposable {
     private val logger = Logger.getInstance(JasprToolingDaemonService::class.java)
-    private var processHandler: KillableColoredProcessHandler? = null
     private val gson = Gson()
 
+    @JasprLegacy("Daemon process handler", "0.23.0")
+    private var processHandler: KillableColoredProcessHandler? = null
+
+    @JasprLegacy("Daemon version", "0.23.0")
     var daemonVersion: String? = null
+
+    @JasprLegacy("Daemon PID", "0.23.0")
     var daemonPid: Long? = null
 
+    var cliVersion: String? = null
+
+    @JasprLegacy("Request ID", "0.23.0")
     private var nextId = 1
+
+    @JasprLegacy("Pending requests map", "0.23.0")
     private val pendingRequests = mutableMapOf<Int, CompletableFuture<Any?>>()
+    
     private val fileScopes = mutableMapOf<String, FileComponentScopes>()
+
+    @JasprLegacy("Output buffer for daemon stream", "0.23.0")
     private val outputBuffer = StringBuilder()
 
+    internal var useFileSystemScopes = false
+    private var watchThread: Thread? = null
+    private var scopesFileLastModified: Long = 0
+
     val isAlive: Boolean
-        get() = processHandler?.isProcessTerminated == false
+        get() = useFileSystemScopes || (processHandler?.isProcessTerminated == false)
 
     fun start() {
         if (isAlive) return
 
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return
-
         val tooling = JasprTooling()
-        try {
-            tooling.preflightCheck(sdkPath)
-        } catch (e: Exception) {
-            logger.warn("Jaspr Tooling Daemon: preflight check failed. ${e.message}")
+
+        cliVersion = tooling.readJasprCliVersion(sdkPath)
+        logger.info("Jaspr Tooling: cliVersion=$cliVersion")
+
+        if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
+            logger.info("Jaspr Tooling: using file-system scopes for version >= 0.23.0")
+            useFileSystemScopes = true
+            setupScopesFileWatcher()
             return
         }
 
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
+        val basePath = project.basePath
+        if (basePath == null || !File(basePath).isDirectory) {
+            logger.warn("Jaspr Tooling: project base path is missing or invalid ($basePath). Cannot start daemon.")
+            return
+        }
+
         val cmd = GeneralCommandLine()
             .withExePath(dartExe)
             .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "tooling-daemon")
             .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(project.basePath)
+            .withWorkDirectory(basePath)
+
 
         try {
             val handler = KillableColoredProcessHandler(cmd)
@@ -104,11 +134,102 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    private fun setupScopesFileWatcher() {
+        val basePath = project.basePath ?: return
+        val scopesFile = File(basePath, ".dart_tool/jaspr/scopes.json")
+        
+        // Initial load
+        if (scopesFile.exists()) {
+            scopesFileLastModified = scopesFile.lastModified()
+            loadScopesFromFile(scopesFile)
+        }
+
+        watchThread = kotlin.concurrent.thread(isDaemon = true, name = "JasprScopesWatcher") {
+            try {
+                while (!Thread.currentThread().isInterrupted) {
+                    Thread.sleep(2000)
+                    if (scopesFile.exists()) {
+                        val currentModified = scopesFile.lastModified()
+                        if (currentModified > scopesFileLastModified) {
+                            scopesFileLastModified = currentModified
+                            loadScopesFromFile(scopesFile)
+                        }
+                    } else {
+                        if (scopesFileLastModified > 0) {
+                            scopesFileLastModified = 0
+                            fileScopes.clear()
+                            ApplicationManager.getApplication().invokeLater { refreshHintsForOpenFiles() }
+                        }
+                    }
+                }
+            } catch (e: InterruptedException) {
+                // Thread interrupted, exit gracefully
+            }
+        }
+    }
+
+    private fun loadScopesFromFile(file: File) {
+        try {
+            val content = file.readText(StandardCharsets.UTF_8)
+            val type = object : TypeToken<Map<String, Any>>() {}.type
+            val data: Map<String, Any> = gson.fromJson(content, type)
+
+            val locationsRaw = data["locations"] as? Map<String, Any> ?: emptyMap()
+            val scopesRaw = data["scopes"] as? Map<String, Any> ?: emptyMap()
+
+            val locations = locationsRaw.mapValues { (_, value) ->
+                val map = value as? Map<String, Any> ?: emptyMap()
+                val path = map["path"] as? String ?: ""
+                ScopeLocation(
+                    path = normalizePath(path),
+                    name = map["name"] as? String ?: "",
+                    line = (map["line"] as? Double)?.toInt() ?: 0,
+                    char = (map["char"] as? Double)?.toInt() ?: 0,
+                    length = (map["length"] as? Double)?.toInt() ?: 0
+                )
+            }
+
+            fileScopes.clear()
+
+            for ((rawPath, scopeData) in scopesRaw) {
+                val filePath = normalizePath(rawPath)
+                val map = scopeData as? Map<String, Any> ?: continue
+
+                val componentIds = (map["components"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                val serverRootIds = (map["serverScopeRoots"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                val clientRootIds = (map["clientScopeRoots"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+                val componentNames = componentIds.mapNotNull { locations[it]?.name }
+                val serverTargets = serverRootIds.mapNotNull { locations[it]?.toScopeTarget() }
+                val clientTargets = clientRootIds.mapNotNull { locations[it]?.toScopeTarget() }
+
+                fileScopes[filePath] = FileComponentScopes(
+                    components = componentNames,
+                    serverScopeRoots = serverTargets,
+                    clientScopeRoots = clientTargets
+                )
+            }
+
+            ApplicationManager.getApplication().invokeLater {
+                refreshHintsForOpenFiles()
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to load scopes from file: ${e.message}")
+        }
+    }
+
     // -------------------------------------------------------------------------
     // HTML conversion
     // -------------------------------------------------------------------------
 
-    fun convertHtml(html: String): String? {
+    fun convertHtml(html: String, filePath: String? = null): String? {
+        val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return null
+        val tooling = JasprTooling()
+        
+        if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
+            return convertHtmlViaCli(sdkPath, html, filePath)
+        }
+
         if (!isAlive) return null
 
         val id = nextId++
@@ -130,10 +251,39 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    private fun convertHtmlViaCli(sdkPath: String, html: String, filePath: String?): String? {
+        val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
+        val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
+
+        val params = mutableListOf("pub", "global", "run", "jaspr_cli:jaspr", "convert-html")
+        if (filePath != null) {
+            params.add("--file")
+            params.add(filePath)
+        } else {
+            params.add("--html")
+            // The CLI expects the HTML string to be JSON-encoded
+            params.add(gson.toJson(html))
+        }
+
+        val cmd = GeneralCommandLine()
+            .withExePath(dartExe)
+            .withParameters(params)
+            .withCharset(StandardCharsets.UTF_8)
+            .withWorkDirectory(project.basePath)
+
+        val out = DefaultCliRunner.run(cmd)
+        if (out.exitCode != 0) {
+            logger.warn("Jaspr CLI convert-html failed: ${out.stderr}")
+            return null
+        }
+        return out.stdout.trim()
+    }
+
     // -------------------------------------------------------------------------
-    // Message handling
+    // Message handling (Legacy)
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon message processing", "0.23.0")
     private fun processDaemonMessage(text: String) {
         try {
             if (text.startsWith("[")) {
@@ -149,6 +299,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    @JasprLegacy("Legacy daemon message handling", "0.23.0")
     private fun handleMessage(message: DaemonMessage) {
         // Response to a pending request (has id, no event)
         if (message.id != null && message.event == null) {
@@ -165,6 +316,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
+    @JasprLegacy("Legacy daemon connected event handler", "0.23.0")
     private fun handleConnectedEvent(params: Map<String, Any>?) {
         daemonVersion = params?.get("version") as? String
         daemonPid = (params?.get("pid") as? Double)?.toLong()
@@ -172,6 +324,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         sendRegisterCommand()
     }
 
+    @JasprLegacy("Legacy daemon scope registration", "0.23.0")
     private fun sendRegisterCommand() {
         val basePath = project.basePath ?: return
         sendCommand(mapOf(
@@ -196,24 +349,20 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     fun refreshHintsForOpenFiles() {
         if (project.isDisposed) return
-        val fileEditorManager = com.intellij.openapi.fileEditor.FileEditorManager.getInstance(project)
-        val psiManager = com.intellij.psi.PsiManager.getInstance(project)
-        val analyzer = DaemonCodeAnalyzer.getInstance(project)
+        
+        // Lightweight restart of the Daemon analyzer to trigger CodeVision updates
+        ApplicationManager.getApplication().invokeLater {
+            if (!project.isDisposed) {
+                val daemonCodeAnalyzer = DaemonCodeAnalyzer.getInstance(project)
+                val psiManager = PsiManager.getInstance(project)
 
-        val openFiles = fileEditorManager.openFiles.filter { it.extension == "dart" }
-        if (openFiles.isEmpty()) return
-
-        for (vFile in openFiles) {
-            ApplicationManager.getApplication().runReadAction {
-                val psiFile = psiManager.findFile(vFile)
-                if (psiFile != null && psiFile.isValid) analyzer.restart(psiFile)
+                for (virtualFile in FileEditorManager.getInstance(project).openFiles) {
+                    val psiFile = psiManager.findFile(virtualFile)
+                    if (psiFile != null) {
+                        daemonCodeAnalyzer.restart(psiFile)
+                    }
+                }
             }
-        }
-
-        try {
-            com.intellij.util.FileContentUtil.reparseFiles(project, openFiles, true)
-        } catch (e: Exception) {
-            logger.warn("JASPR DAEMON: FileContentUtil.reparseFiles failed: ${e.message}")
         }
     }
 
@@ -261,6 +410,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     // Utilities
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon command transmission", "0.23.0")
     private fun sendCommand(command: Any) {
         val json = gson.toJson(listOf(command))
         logger.debug("Sending command to Jaspr Daemon: $json")
@@ -290,12 +440,23 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             if (!it.isProcessTerminated) it.destroyProcess()
             processHandler = null
         }
+        watchThread?.interrupt()
+        watchThread = null
+        
+        // Reset state for clean restarts (important for tests and SDK changes)
+        useFileSystemScopes = false
+        cliVersion = null
+        daemonVersion = null
+        daemonPid = null
+        fileScopes.clear()
+        synchronized(outputBuffer) { outputBuffer.setLength(0) }
     }
 
     // -------------------------------------------------------------------------
     // Data classes
     // -------------------------------------------------------------------------
 
+    @JasprLegacy("Legacy daemon message format", "0.23.0")
     private data class DaemonMessage(
         val id: Int? = null,
         val event: String? = null,
@@ -323,4 +484,20 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         val character: Int,
         val url: String? = null,
     )
+
+    data class ScopeLocation(
+        val path: String,
+        val name: String,
+        val line: Int,
+        val char: Int,
+        val length: Int
+    ) {
+        fun toScopeTarget(): ScopeTarget {
+            return ScopeTarget(
+                path = path,
+                line = line,
+                character = char
+            )
+        }
+    }
 }

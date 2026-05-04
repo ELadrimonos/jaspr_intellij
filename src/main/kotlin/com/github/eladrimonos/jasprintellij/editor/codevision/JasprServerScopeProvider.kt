@@ -1,6 +1,7 @@
 package com.github.eladrimonos.jasprintellij.editor.codevision
 
 import com.github.eladrimonos.jasprintellij.JasprBundle
+import com.github.eladrimonos.jasprintellij.JasprLegacy
 
 class JasprServerScopeProvider : BaseJasprScopeProvider() {
 

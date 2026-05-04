@@ -52,10 +52,6 @@ class JasprDirectoryProjectGenerator : WebProjectTemplate<JasprSettingsPanel>() 
                 return panel.component
             }
 
-            @Deprecated("Deprecated in Java")
-            @Suppress("DEPRECATION", "OverridingDeprecatedMember")
-            override fun getComponent(): JComponent = panel.component
-
             override fun buildUI(settingsStep: SettingsStep) {
                 settingsStep.addSettingsComponent(panel.component)
             }
