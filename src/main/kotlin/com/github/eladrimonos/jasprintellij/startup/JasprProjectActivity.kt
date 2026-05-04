@@ -41,7 +41,7 @@ class JasprProjectActivity : ProjectActivity {
                             .getNotificationGroup("JasprIntelliJ")
                             .createNotification(
                                 "Jaspr Tooling Error",
-                                "Preflight check failed: ${e.message?.substringBefore("\n") ?: "Unknown error"}",
+                                "Preflight check failed: ${e.localizedMessage?.substringBefore("\n") ?: "Unknown error"}",
                                 NotificationType.ERROR
                             )
                             .setIcon(JasprIcons.JasprLogo)
@@ -59,7 +59,7 @@ class JasprProjectActivity : ProjectActivity {
                 } else {
                     // Log other preflight errors
                     com.intellij.openapi.diagnostic.Logger.getInstance(JasprProjectActivity::class.java)
-                        .warn("Jaspr preflight check failed: ${e.message}")
+                        .warn("Jaspr preflight check failed: ${e.localizedMessage}")
                 }
                 return@withContext
             }

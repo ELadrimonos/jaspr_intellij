@@ -12,9 +12,11 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.psi.PsiManager
 import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -351,7 +353,15 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         // Lightweight restart of the Daemon analyzer to trigger CodeVision updates
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) {
-                DaemonCodeAnalyzer.getInstance(project).restart()
+                val daemonCodeAnalyzer = DaemonCodeAnalyzer.getInstance(project)
+                val psiManager = PsiManager.getInstance(project)
+
+                for (virtualFile in FileEditorManager.getInstance(project).openFiles) {
+                    val psiFile = psiManager.findFile(virtualFile)
+                    if (psiFile != null) {
+                        daemonCodeAnalyzer.restart(psiFile)
+                    }
+                }
             }
         }
     }

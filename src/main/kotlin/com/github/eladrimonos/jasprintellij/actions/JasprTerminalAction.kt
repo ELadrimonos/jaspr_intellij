@@ -2,7 +2,6 @@ package com.github.eladrimonos.jasprintellij.actions
 
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
-import com.intellij.execution.ExecutionManager
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.executors.DefaultRunExecutor
@@ -21,8 +20,8 @@ import com.intellij.openapi.util.SystemInfo
 import java.io.File
 import java.nio.charset.StandardCharsets
 
-import com.intellij.execution.process.ProcessAdapter
 import com.intellij.execution.process.ProcessEvent
+import com.intellij.execution.process.ProcessListener
 
 abstract class JasprTerminalAction(
     private val actionTitle: String,
@@ -60,7 +59,7 @@ abstract class JasprTerminalAction(
         ProcessTerminatedListener.attach(processHandler)
 
         if (onFinished != null) {
-            processHandler.addProcessListener(object : ProcessAdapter() {
+            processHandler.addProcessListener(object : ProcessListener {
                 override fun processTerminated(event: ProcessEvent) {
                     if (event.exitCode == 0) {
                         onFinished()

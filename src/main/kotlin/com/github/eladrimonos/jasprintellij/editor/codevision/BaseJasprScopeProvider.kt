@@ -1,7 +1,6 @@
 package com.github.eladrimonos.jasprintellij.editor.codevision
 
 import com.github.eladrimonos.jasprintellij.JasprBundle
-import com.github.eladrimonos.jasprintellij.JasprLegacy
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.intellij.codeInsight.codeVision.*

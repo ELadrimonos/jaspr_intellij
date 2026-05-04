@@ -88,7 +88,7 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
                                 .getNotificationGroup("JasprIntelliJ")
                                 .createNotification(
                                     "Jaspr Tooling Error",
-                                    "Preflight check failed: ${e.message?.substringBefore("\n") ?: "Unknown error"}",
+                                    "Preflight check failed: ${e.localizedMessage?.substringBefore("\n") ?: "Unknown error"}",
                                     NotificationType.ERROR
                                 )
                                 .setIcon(JasprIcons.JasprLogo)
