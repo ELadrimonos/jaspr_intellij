@@ -1,8 +1,8 @@
 # jaspr_intellij
 
 ![Build](https://github.com/ELadrimonos/jaspr_intellij/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/31305.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/31305.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
+[![Version](https://img.shields.io/jetbrains/plugin/v/31305.svg)](https://plugins.jetbrains.com/plugin/31305)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/31305.svg)](https://plugins.jetbrains.com/plugin/31305)
 
 ## Overview
 
