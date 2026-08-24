@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0] - 2026-08-24
+### Fixed
+- Fixed project creation issue where generated files were not copied if the CLI failed on dependency constraints (e.g. `pub get` errors)[cite: 4].
+- Fixed failing unit/integration test suite.
+
+### Changed
+- Added support and compatibility for IntelliJ IDEs version 2026.2.x.
+
 ## [1.1.0] - 2026-05-04
 ### Added
 - Introduced `JasprLegacy` annotation to isolate legacy daemon-based functionality.
