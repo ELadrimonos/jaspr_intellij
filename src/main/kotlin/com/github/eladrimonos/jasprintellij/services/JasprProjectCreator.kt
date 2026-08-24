@@ -70,9 +70,6 @@ class JasprProjectCreator(
             commandLine.addParameter(tempProjectName)
 
             val output: ProcessOutput = cliRunner.run(commandLine)
-            if (output.exitCode != 0) {
-                throw ConfigurationException("Error running Jaspr CLI: ${output.stderr}\n${output.stdout}")
-            }
 
             tempDir.listFiles()?.forEach { file ->
                 val targetFile = File(projectDir, file.name)
@@ -85,10 +82,16 @@ class JasprProjectCreator(
 
             replaceProjectNameInFiles(projectDir, tempProjectName, projectName)
 
-            tempDir.deleteRecursively()
+            if (output.exitCode != 0) {
+                throw ConfigurationException("Error running Jaspr CLI: ${output.stderr}\n${output.stdout}")
+            }
+
         } catch (e: Exception) {
-            if (tempDir.exists()) tempDir.deleteRecursively()
+            // Check if we threw our own ConfigurationException to preserve its message
+            if (e is ConfigurationException) throw e
             throw ConfigurationException("Unexpected error: ${e.message}")
+        } finally {
+            if (tempDir.exists()) tempDir.deleteRecursively()
         }
     }
 
