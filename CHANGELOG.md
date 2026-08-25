@@ -1,9 +1,17 @@
 # Changelog
 
-## [1.2.0] - 2026-08-24
+## [1.2.0] - 2026-08-25
+### Added
+- Dart/Melos workspace detection: the plugin now recognizes when a project is part of a Dart pub workspace or a Melos-managed monorepo, walking up from a member package to find the workspace root.
+- Automatic, idempotent injection of a delimited `melos.scripts` entry (in `melos.yaml` or the root `pubspec.yaml`) that runs `jaspr daemon` scoped to a package — merges safely alongside scripts the user or `melos bootstrap` already declared, without clobbering them.
+- New "Melos script" field in the Jaspr Run/Debug Configuration editor (dropdown of known scripts, editable) — when set, the daemon is launched via `melos run <script>` instead of directly, with all other run-configuration flags (port, mode, dart-defines, etc.) forwarded through.
+- New "Create Melos Script..." action under **Tools → Jaspr**, for registering an additional Jaspr app's script in a monorepo with more than one Jaspr package.
+- Proactive console warning when a run configuration has no "Melos script" set inside a detected workspace, before the daemon fails.
+
 ### Fixed
 - Fixed project creation issue where generated files were not copied if the CLI failed on dependency constraints (e.g. `pub get` errors)[cite: 4].
 - Fixed failing unit/integration test suite.
+- Fixed `--input` and `--dart-define-from-file` paths being resolved against the workspace root instead of the target package directory when running via a Melos script, causing "Specified entry point ... does not exist" failures.
 
 ### Changed
 - Added support and compatibility for IntelliJ IDEs version 2026.2.x.

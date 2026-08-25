@@ -7,10 +7,10 @@ import com.github.eladrimonos.jasprintellij.module.JasprModuleConfigurator
 import com.github.eladrimonos.jasprintellij.services.JasprCliMissingException
 import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
+import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.intellij.notification.NotificationAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -28,6 +28,15 @@ class JasprProjectActivity : ProjectActivity {
         JasprModuleConfigurator.ensureConfigured(project)
 
         withContext(Dispatchers.IO) {
+            if (!JasprRunConfigurationSetup.isMelosInjectionDismissed(project)) {
+                val workspaceInfo = MelosWorkspaceDetector.detect(projectDir)
+                if (workspaceInfo != null) {
+                    withContext(Dispatchers.Main) {
+                        JasprRunConfigurationSetup.notifyAndConfigureForMelos(project, projectDir, workspaceInfo)
+                    }
+                }
+            }
+
             val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return@withContext
             val tooling = JasprTooling()
 

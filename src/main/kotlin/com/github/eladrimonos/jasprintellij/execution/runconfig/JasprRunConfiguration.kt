@@ -1,6 +1,5 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
-import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunProfileState
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.ConfigurationFactory
 import com.intellij.execution.configurations.RunConfiguration
@@ -49,6 +48,7 @@ class JasprRunConfiguration(
         JDOMExternalizerUtil.writeField(element, "dartDefineClient", dartDefineClient)
         JDOMExternalizerUtil.writeField(element, "dartDefineServer", dartDefineServer)
         JDOMExternalizerUtil.writeField(element, "dartDefineFromFile", dartDefineFromFile)
+        JDOMExternalizerUtil.writeField(element, "melosScript", melosScript)
 
         JDOMExternalizerUtil.writeField(element, "verbose", verbose.toString())
         JDOMExternalizerUtil.writeField(element, "experimentalWasm", experimentalWasm.toString())
@@ -72,6 +72,7 @@ class JasprRunConfiguration(
         dartDefineClient = JDOMExternalizerUtil.readField(element, "dartDefineClient") ?: ""
         dartDefineServer = JDOMExternalizerUtil.readField(element, "dartDefineServer") ?: ""
         dartDefineFromFile = JDOMExternalizerUtil.readField(element, "dartDefineFromFile") ?: ""
+        melosScript = JDOMExternalizerUtil.readField(element, "melosScript") ?: ""
 
         verbose = JDOMExternalizerUtil.readField(element, "verbose")?.toBoolean() ?: false
         experimentalWasm = JDOMExternalizerUtil.readField(element, "experimentalWasm")?.toBoolean() ?: false
@@ -144,6 +145,10 @@ class JasprRunConfiguration(
     var dartDefineFromFile: String
         get() = options.dartDefineFromFile
         set(v) { options.dartDefineFromFile = v }
+
+    var melosScript: String
+        get() = options.melosScript
+        set(v) { options.melosScript = v }
 
     // endregion
 }

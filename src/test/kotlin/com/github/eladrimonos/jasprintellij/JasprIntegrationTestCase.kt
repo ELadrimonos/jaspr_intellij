@@ -58,6 +58,18 @@ abstract class JasprIntegrationTestCase : BasePlatformTestCase() {
         println("Successfully installed jaspr_cli version $version")
     }
 
+    protected fun installMelos() {
+        println("Installing melos...")
+        val dartExe = File(sdkPath, "bin/dart").absolutePath
+        val cmd = GeneralCommandLine(dartExe, "pub", "global", "activate", "melos")
+            .withCharset(StandardCharsets.UTF_8)
+        val result = DefaultCliRunner.run(cmd)
+        if (result.exitCode != 0) {
+            error("Failed to install melos: ${result.stderr}\n${result.stdout}")
+        }
+        println("Successfully installed melos")
+    }
+
     protected fun createTestProjectDir(name: String): File {
         val root = File(System.getProperty("java.io.tmpdir"), "jaspr_intellij_integration_tests")
         return File(root, name).apply {

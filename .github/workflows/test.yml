@@ -64,6 +64,10 @@ jobs:
       - name: Install Jaspr CLI
         run: dart pub global activate jaspr_cli
 
+      # Install Melos globally (needed by the Melos workspace integration tests)
+      - name: Install Melos
+        run: dart pub global activate melos
+
       # Set up the Java environment for the next steps
       - name: Setup Java
         uses: actions/setup-java@v5

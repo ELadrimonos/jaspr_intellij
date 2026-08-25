@@ -85,4 +85,14 @@ class JasprRunConfigurationOptions : RunConfigurationOptions() {
         get() = _dartDefineFromFile ?: ""
         set(v) { _dartDefineFromFile = v.ifEmpty { null } }
     private var _dartDefineFromFile by string("")
+
+    /**
+     * Optional Melos script name to run via `melos run <name>` instead of invoking
+     * jaspr directly. Used when the project is part of a Dart/Melos workspace with
+     * multiple Jaspr packages.
+     */
+    var melosScript: String
+        get() = _melosScript ?: ""
+        set(v) { _melosScript = v.ifEmpty { null } }
+    private var _melosScript by string("")
 }

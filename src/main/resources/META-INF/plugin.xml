@@ -113,6 +113,9 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
                     text="Check Daemon Status" description="Show the current status of the Jaspr Tooling Daemon"/>
             <action id="Jaspr.UpdateCli" class="com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction"
                     text="Update Jaspr CLI" description="Run 'dart pub global activate jaspr_cli'"/>
+            <separator/>
+            <action id="Jaspr.CreateMelosScript" class="com.github.eladrimonos.jasprintellij.actions.CreateMelosScriptAction"
+                    text="Create Melos Script..." description="Add a jaspr daemon script to this Dart/Melos workspace"/>
         </group>
 
         <action
