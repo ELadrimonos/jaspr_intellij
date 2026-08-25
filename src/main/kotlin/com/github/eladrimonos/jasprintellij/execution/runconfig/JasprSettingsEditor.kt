@@ -1,5 +1,7 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
+import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
+import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.intellij.execution.ui.RunConfigurationFragmentedEditor
 import com.intellij.execution.ui.SettingsEditorFragment
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
@@ -10,6 +12,7 @@ import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.fields.ExpandableTextField
 import java.awt.BorderLayout
+import java.io.File
 import java.util.function.Predicate
 
 class JasprSettingsEditor(
@@ -151,6 +154,43 @@ class JasprSettingsEditor(
         fragments.add(createDartDefineFragment("jaspr.dartDefineClient", "Dart define client", "--dart-define-client:", { it.dartDefineClient }, { c, v -> c.dartDefineClient = v }))
         fragments.add(createDartDefineFragment("jaspr.dartDefineServer", "Dart define server", "--dart-define-server:", { it.dartDefineServer }, { c, v -> c.dartDefineServer = v }))
         fragments.add(createDartDefineFragment("jaspr.dartDefineFromFile", "Dart define from file", "--dart-define-from-file:", { it.dartDefineFromFile }, { c, v -> c.dartDefineFromFile = v }))
+
+        // -----------------------------------------------------------------------
+        // 7. Melos script — a single toggle: checking it reveals the dropdown (the
+        //    flags above still apply, forwarded to melos via `--`; only the
+        //    invocation changes to `melos run <script>`); unchecking it clears
+        //    the value. Populated with scripts already registered by this plugin
+        //    in the detected workspace, but stays editable for ad-hoc names.
+        // -----------------------------------------------------------------------
+        val knownMelosScripts: List<String> = run {
+            val basePath = project.basePath ?: return@run emptyList()
+            val workspaceInfo = MelosWorkspaceDetector.detect(File(basePath)) ?: return@run emptyList()
+            MelosScriptInjector.listScriptNames(workspaceInfo.melosConfigFile)
+        }
+        val melosCombo = ComboBox(knownMelosScripts.toTypedArray()).apply { isEditable = true }
+        val melosLabeled = LabeledComponent.create(melosCombo, "Melos script:", BorderLayout.WEST)
+        fragments.add(object : SettingsEditorFragment<JasprRunConfiguration, LabeledComponent<ComboBox<String>>>(
+            "jaspr.melosScript", "Melos script", "Melos", melosLabeled,
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                c.component.selectedItem = config.melosScript
+            },
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                config.melosScript = (c.component.editor.item as? String)?.trim().orEmpty()
+            },
+            Predicate { it.melosScript.isNotBlank() },
+        ) {
+            override fun setSelected(selected: Boolean) {
+                super.setSelected(selected)
+                if (!selected) {
+                    // Only clear the UI here — let the normal apply() callback above persist
+                    // that to the config when Apply/OK is actually clicked. Mutating the
+                    // config directly from here made the editor's "before vs. after" diff
+                    // collapse to "no change", which kept Apply permanently disabled.
+                    melosCombo.selectedItem = ""
+                    JasprRunConfigurationSetup.markMelosInjectionDismissed(project)
+                }
+            }
+        })
 
         return fragments
     }

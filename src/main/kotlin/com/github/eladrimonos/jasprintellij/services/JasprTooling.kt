@@ -18,13 +18,38 @@ class JasprTooling(
     private val logger: Logger = Logger.getInstance(JasprTooling::class.java),
 ) {
     companion object {
-        fun isJasprProject(project: Project): Boolean {
-            val basePath = project.basePath ?: return false
+        fun isJasprProject(project: Project): Boolean = findJasprProjectDir(project) != null
+
+        /**
+         * Resolves the directory of the actual Jaspr package to run tooling against:
+         * the opened project root if it directly depends on jaspr, otherwise the
+         * nearest workspace/Melos member package that does (so the daemon runs with
+         * that package's own `analysis_options.yaml` / `.dart_tool` in scope).
+         */
+        fun findJasprProjectDir(project: Project): File? {
+            val basePath = project.basePath ?: return null
             val projectDir = File(basePath)
-            val pubspec = File(projectDir, "pubspec.yaml")
+
+            if (pubspecMentionsJaspr(File(projectDir, "pubspec.yaml"))) return projectDir
+
+            // Root pubspec.yaml (or melos.yaml) may be a bare workspace manifest with no
+            // jaspr dependency of its own — check member packages before giving up.
+            val workspaceInfo = MelosWorkspaceDetector.detect(projectDir) ?: return null
+            return workspaceInfo.memberPackagePaths
+                .map { relativePath -> File(workspaceInfo.workspaceRoot, relativePath) }
+                .firstOrNull { memberDir -> pubspecMentionsJaspr(File(memberDir, "pubspec.yaml")) }
+        }
+
+        // Matches an actual `jaspr:` dependency declaration line (e.g. "  jaspr: ^0.23.4"),
+        // not any incidental mention of the word "jaspr" elsewhere in the file — root
+        // pubspec.yaml in a Melos monorepo commonly references "jaspr_cli:jaspr" inside
+        // melos script definitions, which is not a dependency declaration.
+        private val JASPR_DEPENDENCY_REGEX = Regex("""(?m)^\s*jaspr\s*:\s*\S""")
+
+        private fun pubspecMentionsJaspr(pubspec: File): Boolean {
             if (!pubspec.exists()) return false
             return try {
-                pubspec.readText().contains("jaspr")
+                JASPR_DEPENDENCY_REGEX.containsMatchIn(pubspec.readText())
             } catch (e: Exception) {
                 false
             }

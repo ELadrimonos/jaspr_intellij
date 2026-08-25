@@ -7,7 +7,7 @@ import com.intellij.codeInsight.codeVision.*
 import com.intellij.codeInsight.codeVision.ui.model.ClickableTextCodeVisionEntry
 import com.intellij.codeInsight.hints.codeVision.DaemonBoundCodeVisionProvider
 import com.intellij.ide.BrowserUtil
-import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
@@ -49,7 +49,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
 
         val results = mutableListOf<Pair<TextRange, CodeVisionEntry>>()
 
-        runReadAction {
+        ReadAction.compute<Unit, Throwable> {
             SyntaxTraverser.psiTraverser(file)
                 .filter(DartClassDefinition::class.java)
                 .forEach { element ->

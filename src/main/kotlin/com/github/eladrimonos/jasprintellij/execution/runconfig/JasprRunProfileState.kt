@@ -2,6 +2,8 @@ package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.github.eladrimonos.jasprintellij.execution.JasprDaemonProcessHandler
 import com.github.eladrimonos.jasprintellij.execution.JasprVmServiceDebugProcess
+import com.github.eladrimonos.jasprintellij.services.MelosPathResolver
+import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
 import com.intellij.execution.DefaultExecutionResult
 import com.intellij.execution.ExecutionResult
@@ -117,6 +119,12 @@ class JasprRunProfileState(
         ProcessTerminatedListener.attach(processHandler)
         processHandler.startNotify()
 
+        // Printed after startNotify(): a ConsoleView's highlighting only renders
+        // reliably once the process has actually started — printing before that
+        // point (e.g. right at the top of execute()) makes the very first lines
+        // come out in the default/plain color, same content type or not.
+        warnIfMelosScriptMissing()
+
         return if (isDebug) {
             val tabbedComponent = JBTabbedPane()
             tabbedComponent.addTab("Server", serverConsole.component)
@@ -126,6 +134,28 @@ class JasprRunProfileState(
         } else {
             DefaultExecutionResult(serverConsole, processHandler)
         }
+    }
+
+    /**
+     * Warns (without blocking execution) when this project sits inside a Dart/Melos
+     * workspace but no "Melos script" is configured — the direct `jaspr daemon`
+     * invocation about to run will likely fail with "Missing 'jaspr' options in
+     * pubspec.yaml" since the workspace root's pubspec.yaml doesn't declare jaspr.
+     */
+    private fun warnIfMelosScriptMissing() {
+        if (options.melosScript.isNotBlank()) return
+        val basePath = project.basePath ?: return
+        val workspaceInfo = MelosWorkspaceDetector.detect(File(basePath)) ?: return
+
+        serverConsole.print(
+            "⚠ This project is part of a Dart/Melos workspace (root: ${workspaceInfo.workspaceRoot.name}),\n" +
+                "  but no \"Melos script\" is set in this run configuration.\n" +
+                "  Running jaspr directly from here will likely fail, since the workspace root's\n" +
+                "  pubspec.yaml doesn't declare jaspr.\n" +
+                "  Set \"Melos script\" under Modify Options, or create one via\n" +
+                "  Tools → Jaspr → Create Melos Script...\n\n",
+            ConsoleViewContentType.LOG_WARNING_OUTPUT,
+        )
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -297,12 +327,41 @@ class JasprRunProfileState(
             .withCharset(StandardCharsets.UTF_8)
             .withEnvironment(EnvironmentUtil.getEnvironmentMap())
 
+        // When a Melos script is configured (project inside a Dart/Melos workspace),
+        // the actual `jaspr daemon` invocation lives inside the injected melos script
+        // (see MelosScriptInjector). We still forward the same flags after `--` so
+        // options configured in this run configuration (port, mode, dart-defines...)
+        // reach the daemon exactly like they would in the direct-invocation path.
+        if (options.melosScript.isNotBlank()) {
+            cmd.addParameters("pub", "global", "run", "melos", "run", options.melosScript, "--")
+            addJasprFlags(cmd)
+            return cmd
+        }
+
         cmd.addParameters("pub", "global", "run", "jaspr_cli:jaspr", "daemon")
+        addJasprFlags(cmd)
+
+        return cmd
+    }
+
+    /** Appends the `jaspr daemon` flags derived from [options] — shared by the direct and Melos paths. */
+    private fun addJasprFlags(cmd: GeneralCommandLine) {
+        // `melos run` executes the underlying command with the target PACKAGE
+        // directory as cwd, not the workspace root — unlike the direct-invocation
+        // path, where cwd is always `project.basePath`. Any file-path flag stored
+        // relative to the workspace root (e.g. "apps/website/lib/main.server.dart")
+        // must be re-based relative to that package directory (e.g. "lib/main.server.dart")
+        // or jaspr_cli fails with "Specified entry point ... does not exist."
+        val rebasePath: (String) -> String = if (options.melosScript.isNotBlank()) {
+            { resolvePathForMelosCwd(it) }
+        } else {
+            { it }
+        }
 
         if (options.verbose) cmd.addParameter("--verbose")
 
         options.input.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--input", it) }
+            ?.let { cmd.addParameters("--input", rebasePath(it)) }
 
         options.mode.takeIf { it.isNotBlank() }
             ?.let { cmd.addParameters("--mode", it) }
@@ -328,14 +387,22 @@ class JasprRunProfileState(
         addMultiValueParam(cmd, options.dartDefine, "--dart-define")
         addMultiValueParam(cmd, options.dartDefineClient, "--dart-define-client")
         addMultiValueParam(cmd, options.dartDefineServer, "--dart-define-server")
-        addMultiValueParam(cmd, options.dartDefineFromFile, "--dart-define-from-file")
-
-        return cmd
+        addMultiValueParam(cmd, options.dartDefineFromFile, "--dart-define-from-file", rebasePath)
     }
 
-    private fun addMultiValueParam(cmd: GeneralCommandLine, raw: String, flag: String) {
+    private fun addMultiValueParam(
+        cmd: GeneralCommandLine,
+        raw: String,
+        flag: String,
+        transform: (String) -> String = { it },
+    ) {
         raw.lines().map { it.trim() }.filter { it.isNotBlank() }
-            .forEach { cmd.addParameters(flag, it) }
+            .forEach { cmd.addParameters(flag, transform(it)) }
+    }
+
+    private fun resolvePathForMelosCwd(rawPath: String): String {
+        val basePath = project.basePath ?: return rawPath
+        return MelosPathResolver.rebaseRelativeToPackage(basePath, rawPath)
     }
 
     // ─────────────────────────────────────────────────────────────────────────

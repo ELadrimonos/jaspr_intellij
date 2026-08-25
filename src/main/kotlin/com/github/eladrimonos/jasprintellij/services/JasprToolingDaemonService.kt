@@ -12,11 +12,11 @@ import com.intellij.execution.process.ProcessEvent
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.SystemInfo
-import com.intellij.psi.PsiManager
+import com.intellij.util.FileContentUtilCore
 import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
@@ -54,6 +54,15 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     private var watchThread: Thread? = null
     private var scopesFileLastModified: Long = 0
 
+    /**
+     * Directory of the actual Jaspr package the daemon/CLI should run against —
+     * the project root if it depends on jaspr directly, otherwise the nearest
+     * workspace/Melos member package that does. Falls back to [Project.getBasePath]
+     * if no jaspr package can be found, so callers always get a usable path.
+     */
+    private val jasprProjectDir: File
+        get() = JasprTooling.findJasprProjectDir(project) ?: File(project.basePath ?: ".")
+
     val isAlive: Boolean
         get() = useFileSystemScopes || (processHandler?.isProcessTerminated == false)
 
@@ -76,9 +85,9 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
-        val basePath = project.basePath
-        if (basePath == null || !File(basePath).isDirectory) {
-            logger.warn("Jaspr Tooling: project base path is missing or invalid ($basePath). Cannot start daemon.")
+        val jasprDir = jasprProjectDir
+        if (!jasprDir.isDirectory) {
+            logger.warn("Jaspr Tooling: Jaspr package directory is missing or invalid ($jasprDir). Cannot start daemon.")
             return
         }
 
@@ -86,7 +95,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             .withExePath(dartExe)
             .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "tooling-daemon")
             .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(basePath)
+            .withWorkDirectory(jasprDir)
 
 
         try {
@@ -135,9 +144,19 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     }
 
     private fun setupScopesFileWatcher() {
-        val basePath = project.basePath ?: return
-        val scopesFile = File(basePath, ".dart_tool/jaspr/scopes.json")
-        
+        val scopesFile = File(jasprProjectDir, ".dart_tool/jaspr/scopes.json")
+        logger.info(
+            "Jaspr Tooling: watching scopes file at ${scopesFile.absolutePath} " +
+                "(jasprProjectDir=${jasprProjectDir.absolutePath}, exists=${scopesFile.exists()})"
+        )
+        if (!scopesFile.exists()) {
+            logger.info(
+                "Jaspr Tooling: scopes.json not found yet. It is written by the Jaspr CLI while a " +
+                    "dev server ('jaspr serve'/run) is active against this package — start it and the " +
+                    "watcher will pick the file up automatically."
+            )
+        }
+
         // Initial load
         if (scopesFile.exists()) {
             scopesFileLastModified = scopesFile.lastModified()
@@ -210,11 +229,19 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
                 )
             }
 
+            logger.info(
+                "Jaspr Tooling: loaded scopes.json — files=${fileScopes.size}, " +
+                    "components=${fileScopes.values.sumOf { it.components.size }}"
+            )
+            if (fileScopes.isNotEmpty()) {
+                logger.info("Jaspr Tooling: known scope file paths: ${fileScopes.keys.take(10)}")
+            }
+
             ApplicationManager.getApplication().invokeLater {
                 refreshHintsForOpenFiles()
             }
         } catch (e: Exception) {
-            logger.warn("Failed to load scopes from file: ${e.message}")
+            logger.warn("Failed to load scopes from file: ${e.message}", e)
         }
     }
 
@@ -269,7 +296,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             .withExePath(dartExe)
             .withParameters(params)
             .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(project.basePath)
+            .withWorkDirectory(jasprProjectDir)
 
         val out = DefaultCliRunner.run(cmd)
         if (out.exitCode != 0) {
@@ -326,11 +353,10 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     @JasprLegacy("Legacy daemon scope registration", "0.23.0")
     private fun sendRegisterCommand() {
-        val basePath = project.basePath ?: return
         sendCommand(mapOf(
             "id"     to nextId++,
             "method" to "scopes.register",
-            "params" to mapOf("folders" to listOf(basePath)),
+            "params" to mapOf("folders" to listOf(jasprProjectDir.absolutePath)),
         ))
     }
 
@@ -342,26 +368,28 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         val normalizedPath = normalizePath(filePath)
         val scopes = fileScopes[normalizedPath]
         if (scopes == null && fileScopes.isNotEmpty()) {
-            logger.debug("JASPR DAEMON: no scopes found for $normalizedPath. Known paths: ${fileScopes.keys.size}")
+            logger.info("Jaspr Tooling: no scopes found for $normalizedPath. Known paths: ${fileScopes.keys.size}")
         }
         return scopes
     }
 
     fun refreshHintsForOpenFiles() {
         if (project.isDisposed) return
-        
-        // Lightweight restart of the Daemon analyzer to trigger CodeVision updates
-        ApplicationManager.getApplication().invokeLater {
-            if (!project.isDisposed) {
-                val daemonCodeAnalyzer = DaemonCodeAnalyzer.getInstance(project)
-                val psiManager = PsiManager.getInstance(project)
 
-                for (virtualFile in FileEditorManager.getInstance(project).openFiles) {
-                    val psiFile = psiManager.findFile(virtualFile)
-                    if (psiFile != null) {
-                        daemonCodeAnalyzer.restart(psiFile)
-                    }
-                }
+        ApplicationManager.getApplication().invokeLater {
+            if (project.isDisposed) return@invokeLater
+
+            DaemonCodeAnalyzer.getInstance(project).restart()
+
+            // DaemonCodeAnalyzer.restart() alone is not enough for already-open editors:
+            // CodeVision keeps a per-document result cache that a plain daemon restart
+            // does not invalidate, so tabs opened before scope data was ready would
+            // otherwise keep showing no CodeVision until manually closed and reopened.
+            // Force a real reparse of those open Dart files so CodeVision recomputes.
+            val openDartFiles = FileEditorManager.getInstance(project).openFiles
+                .filter { it.extension == "dart" }
+            if (openDartFiles.isNotEmpty()) {
+                FileContentUtilCore.reparseFiles(openDartFiles)
             }
         }
     }
@@ -427,7 +455,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     private fun normalizePath(raw: String): String = try {
         val file = if (raw.startsWith("file://")) File(URI(raw))
-        else File(raw).let { if (it.isAbsolute) it else File(project.basePath, raw) }
+        else File(raw).let { if (it.isAbsolute) it else File(jasprProjectDir, raw) }
         file.canonicalPath.replace("\\", "/")
     } catch (e: Exception) {
         File(raw).absolutePath.replace("\\", "/")

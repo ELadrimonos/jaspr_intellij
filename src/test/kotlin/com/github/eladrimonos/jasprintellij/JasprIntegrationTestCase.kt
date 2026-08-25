@@ -25,6 +25,10 @@ abstract class JasprIntegrationTestCase : BasePlatformTestCase() {
         // Ensure project base path exists as a real directory
         project.basePath?.let { File(it).mkdirs() }
 
+        // sdkPath (e.g. CI's DART_HOME) may live outside the test sandbox's allowed
+        // VFS roots (esp. on Windows), causing VfsRootAccessNotAllowedError.
+        com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess.allowRootAccess(testRootDisposable, sdkPath)
+
         // Configure Dart SDK in the project so JasprDartSdkResolver finds it.
         com.intellij.openapi.application.ApplicationManager.getApplication().runWriteAction {
             com.jetbrains.lang.dart.sdk.DartSdkLibUtil.ensureDartSdkConfigured(project, sdkPath)
@@ -56,6 +60,18 @@ abstract class JasprIntegrationTestCase : BasePlatformTestCase() {
             error("Failed to install jaspr_cli $version: ${result.stderr}\n${result.stdout}")
         }
         println("Successfully installed jaspr_cli version $version")
+    }
+
+    protected fun installMelos() {
+        println("Installing melos...")
+        val dartExe = File(sdkPath, "bin/dart").absolutePath
+        val cmd = GeneralCommandLine(dartExe, "pub", "global", "activate", "melos")
+            .withCharset(StandardCharsets.UTF_8)
+        val result = DefaultCliRunner.run(cmd)
+        if (result.exitCode != 0) {
+            error("Failed to install melos: ${result.stderr}\n${result.stdout}")
+        }
+        println("Successfully installed melos")
     }
 
     protected fun createTestProjectDir(name: String): File {
