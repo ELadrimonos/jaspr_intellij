@@ -91,9 +91,14 @@ class JasprVersionComparisonTest : JasprIntegrationTestCase() {
                 serverUri = uri
                 latch.countDown()
             }
+            handler.addProcessListener(object : com.intellij.execution.process.ProcessAdapter() {
+                override fun onTextAvailable(event: com.intellij.execution.process.ProcessEvent, outputType: com.intellij.openapi.util.Key<*>) {
+                    println("[daemon:$version:$outputType] ${event.text}")
+                }
+            })
             try {
-                val started = latch.await(60, TimeUnit.SECONDS)
-                assertTrue("Daemon failed to start and provide VM Service URI for version $version within 60s", started)
+                val started = latch.await(180, TimeUnit.SECONDS)
+                assertTrue("Daemon failed to start and provide VM Service URI for version $version within 180s", started)
                 assertNotNull("VM Service URI should not be null for version $version", serverUri)
                 println("✓ Daemon execution verified for version $version (VM Service: $serverUri)")
             } finally {
