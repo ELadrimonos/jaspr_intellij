@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
 import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
@@ -95,7 +96,12 @@ object JasprRunConfigurationSetup {
      * Must be called on the EDT — performs file I/O for the injection, which is acceptable
      * here as it is a single small, idempotent read+write triggered once per project open.
      */
-    fun notifyAndConfigureForMelos(project: Project, projectDir: File, info: MelosWorkspaceDetector.WorkspaceInfo) {
+    fun notifyAndConfigureForMelos(
+        project: Project,
+        projectDir: File,
+        info: MelosWorkspaceDetector.WorkspaceInfo,
+        melosSupportsInheritedStdio: Boolean = false,
+    ) {
         ApplicationManager.getApplication().assertIsDispatchThread()
         if (project.isDisposed) return
 
@@ -109,11 +115,14 @@ object JasprRunConfigurationSetup {
         val packageName = readPackageName(projectDir) ?: projectDir.name
         val scriptName = DEFAULT_MELOS_SCRIPT_NAME
 
-        val injectionResult = MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, packageName)
+        val relativeDir = if (melosSupportsInheritedStdio) {
+            MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, packageName)
+        } else null
+        val injectionResult = MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, packageName, relativeDir)
         if (injectionResult is MelosScriptInjector.InjectionResult.ConflictExistingMelosSection) {
             NotificationGroupManager.getInstance()
                 .getNotificationGroup("JasprIntelliJ")
-                .createNotification("Melos script conflict", injectionResult.message, NotificationType.WARNING)
+                .createNotification(JasprBundle.message("jaspr.notification.melos.conflict.title"), injectionResult.message, NotificationType.WARNING)
                 .setIcon(JasprIcons.JasprLogo)
                 .notify(project)
             return
@@ -130,13 +139,12 @@ object JasprRunConfigurationSetup {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("JasprIntelliJ")
             .createNotification(
-                "Melos workspace detected",
-                "This project is part of a Dart/Melos workspace. The Jaspr run configuration " +
-                    "\"${settings.name}\" now runs via <code>melos run $scriptName</code>.",
+                JasprBundle.message("jaspr.notification.melos.detected.title"),
+                JasprBundle.message("jaspr.notification.melos.detected.content", settings.name, scriptName),
                 NotificationType.INFORMATION,
             )
             .setIcon(JasprIcons.JasprLogo)
-            .addAction(NotificationAction.create("Don't ask again") { _, notification ->
+            .addAction(NotificationAction.create(JasprBundle.message("jaspr.notification.dont.ask.again")) { _, notification ->
                 markMelosInjectionDismissed(project)
                 notification.expire()
             })

@@ -19,6 +19,7 @@ class JasprRunConfigurationTest : BasePlatformTestCase() {
         config.verbose = true
         config.mode = "reload"
         config.dartDefine = "KEY=VALUE"
+        config.openDevTools = true
 
         // Write to XML
         val element = Element("configuration")
@@ -34,6 +35,7 @@ class JasprRunConfigurationTest : BasePlatformTestCase() {
         assertTrue(newConfig.verbose)
         assertEquals("reload", newConfig.mode)
         assertEquals("KEY=VALUE", newConfig.dartDefine)
+        assertTrue(newConfig.openDevTools)
     }
 
     fun testOptionsMapping() {

@@ -115,4 +115,19 @@ class MelosWorkspaceDetectorTest {
 
         assertNull(MelosWorkspaceDetector.detect(dir))
     }
+
+    @Test
+    fun `resolves a member package dir by name relative to the config file`() {
+        File(root, "pubspec.yaml").writeText("name: ws\nworkspace:\n  - apps/site\n  - packages/ui\n")
+        File(root, "apps/site").mkdirs()
+        File(root, "apps/site/pubspec.yaml").writeText("name: website\n")
+        File(root, "packages/ui").mkdirs()
+        File(root, "packages/ui/pubspec.yaml").writeText("name: ui_kit\n")
+
+        val info = MelosWorkspaceDetector.detect(root)!!
+
+        assertEquals("apps/site", MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "website"))
+        assertEquals("packages/ui", MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "ui_kit"))
+        assertNull(MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "missing"))
+    }
 }

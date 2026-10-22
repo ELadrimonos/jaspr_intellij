@@ -13,10 +13,17 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
 <p><i>Requires the Dart plugin and jaspr_cli.</i></p>
 
 <h3>Run Configuration</h3>
-<p>Run <code>jaspr daemon</code> directly from the IDE with graceful shutdown and Chrome lifecycle management.</p>
+<p>Run <code>jaspr daemon</code> directly from the IDE with graceful shutdown and Chrome lifecycle management.
+Choose what happens on save (refresh, hot reload or hot restart), and use the <b>Jaspr Hot Reload</b> /
+<b>Jaspr Hot Restart</b> toolbar buttons while the app is running. Debug attaches to both the server and the client.</p>
+
+<h3>Dart Workspaces &amp; Melos</h3>
+<p>Detects Dart pub workspaces and Melos monorepos, and runs the daemon for the right package through an
+auto-generated Melos script.</p>
 
 <h3>Component Scopes</h3>
-<p>Inline code vision hints show whether a component renders on the server or the client, powered by the <code>jaspr tooling-daemon</code>.</p>
+<p>Inline code vision hints show whether a component renders on the server or the client, based on the scope
+data the Jaspr CLI writes while your app is running.</p>
 
 <h3>HTML to Jaspr Conversion</h3>
 <p>Right-click any <code>.html</code> file and select <b>Convert to Jaspr</b> to generate the equivalent Dart component.</p>
@@ -25,10 +32,11 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
 <p>Create a new Jaspr project from scratch using the IDE's project wizard with full CLI integration.</p>
 
 <h3>Live Templates</h3>
-<p>Built-in templates for common patterns: <code>stlessc</code>, <code>stfulc</code>, <code>jhtml</code>, <code>jtext</code>, and more.</p>
+<p>Built-in templates for common patterns: <code>stlessc</code>, <code>stfulc</code>, <code>jhtml</code>, <code>jstyls</code>, and more.</p>
 
 <h3>Advanced Tooling</h3>
-<p>Run <code>jaspr clean</code> and <code>jaspr doctor</code> from the Tools menu. Includes version mismatch notifications and console output formatting.</p>
+<p>Run <code>jaspr build</code>, <code>jaspr clean</code> and <code>jaspr doctor</code> from the Tools menu. Includes version
+mismatch notifications and formatted console output. Supports Jaspr 0.22 to 0.24.</p>
     ]]>
     </description>
 
@@ -73,6 +81,9 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
                 contextId="JASPR_STATEMENT"
                 implementation="com.github.eladrimonos.jasprintellij.template.JasprStatementTemplateContextType"/>
         <liveTemplateContext
+                contextId="JASPR_CLASS_MEMBER"
+                implementation="com.github.eladrimonos.jasprintellij.template.JasprClassMemberTemplateContextType"/>
+        <liveTemplateContext
                 contextId="JASPR_ANYWHERE"
                 implementation="com.github.eladrimonos.jasprintellij.template.JasprAnywhereTemplateContextType"/>
 
@@ -90,6 +101,19 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
                 shortName="JasprMultipleAnnotations"
                 implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprMultipleAnnotationsInspection"/>
 
+        <localInspection
+                language="Dart"
+                bundle="messages.JasprBundle"
+                key="jaspr.inspection.nested.selector.concatenation.name"
+                groupKey="jaspr.inspection.group.name"
+                enabledByDefault="true"
+                level="WARNING"
+                shortName="JasprNestedSelectorConcatenation"
+                implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprNestedSelectorConcatenationInspection"/>
+
+        <editorNotificationProvider
+                implementation="com.github.eladrimonos.jasprintellij.editor.JasprCliVersionMismatchNotificationProvider"/>
+
         <newProjectWizard.generator
                 implementation="com.github.eladrimonos.jasprintellij.template.project.JasprNewProjectWizard"/>
 
@@ -97,6 +121,11 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
                 implementation="com.github.eladrimonos.jasprintellij.template.project.JasprDirectoryProjectGenerator"/>
 
     </extensions>
+
+    <projectListeners>
+        <listener class="com.github.eladrimonos.jasprintellij.editor.JasprPubspecChangeListener"
+                  topic="com.intellij.openapi.vfs.newvfs.BulkFileListener"/>
+    </projectListeners>
 
     <actions>
         <group id="JasprToolsGroup" class="com.github.eladrimonos.jasprintellij.actions.JasprActionGroup" text="Jaspr"
@@ -131,7 +160,7 @@ This plugin integrates the Jaspr toolchain directly into your IDE.</p>
                 id="Jaspr.ConvertHtmlToJaspr"
                 class="com.github.eladrimonos.jasprintellij.actions.ConvertHtmlToJasprAction"
                 text="Convert to Jaspr"
-                description="Convert this HTML file to Jaspr Dart code using the tooling daemon"
+                description="Convert this HTML file to a Jaspr component"
                 icon="com.github.eladrimonos.jasprintellij.icons.JasprIcons.JasprLogo">
             <add-to-group group-id="ProjectViewPopupMenu" relative-to-action="WeighingNewGroup" anchor="after"/>
         </action>

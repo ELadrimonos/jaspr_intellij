@@ -1,8 +1,12 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
 import com.github.eladrimonos.jasprintellij.execution.JasprDaemonProcessHandler
+import com.github.eladrimonos.jasprintellij.execution.JasprHotReloadAction
 import com.github.eladrimonos.jasprintellij.execution.JasprVmServiceDebugProcess
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
+import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.github.eladrimonos.jasprintellij.services.MelosPathResolver
+import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
 import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
 import com.intellij.execution.DefaultExecutionResult
@@ -65,6 +69,9 @@ class JasprRunProfileState(
     // Kept as a field so attachClientVmDebugger can reference it.
     private lateinit var processHandler: JasprDaemonProcessHandler
 
+    /** Installed jaspr_cli version, resolved in [buildCommandLine]; null when unknown. */
+    private var cliVersion: String? = null
+
     // -------------------------------------------------------------------------
 
     override fun execute(executor: Executor?, runner: ProgramRunner<*>): ExecutionResult {
@@ -93,8 +100,10 @@ class JasprRunProfileState(
                         "   DevTools: $devToolsUrl\n",
                         ConsoleViewContentType.SYSTEM_OUTPUT,
                     )
-                    ApplicationManager.getApplication().invokeLater {
-                        BrowserUtil.open(devToolsUrl)
+                    if (options.openDevTools) {
+                        ApplicationManager.getApplication().invokeLater {
+                            BrowserUtil.open(devToolsUrl)
+                        }
                     }
                     attachServerVmDebugger(vmServiceUri)
                 }
@@ -124,15 +133,24 @@ class JasprRunProfileState(
         // point (e.g. right at the top of execute()) makes the very first lines
         // come out in the default/plain color, same content type or not.
         warnIfMelosScriptMissing()
+        warnIfPortOptionsIgnored()
+
+        // Through Melos, client.restart only reaches the daemon if the script forwards
+        // stdin (`stdio: inherit`); `melos exec` scripts don't — hide the buttons then.
+        val hotReloadActions =
+            if (canSendDaemonCommands()) {
+                // Stateful hot reload arrived with the same CLI release as `--auto` (0.24.0).
+                JasprHotReloadAction.create(processHandler, supportsHotReload = JasprDaemonFlags.supportsAutoAction(cliVersion))
+            } else emptyArray()
 
         return if (isDebug) {
             val tabbedComponent = JBTabbedPane()
             tabbedComponent.addTab("Server", serverConsole.component)
             tabbedComponent.addTab("Client",  clientConsole.component)
             compositeConsole.setTabbedComponent(tabbedComponent)
-            DefaultExecutionResult(compositeConsole, processHandler)
+            DefaultExecutionResult(compositeConsole, processHandler, *hotReloadActions)
         } else {
-            DefaultExecutionResult(serverConsole, processHandler)
+            DefaultExecutionResult(serverConsole, processHandler, *hotReloadActions)
         }
     }
 
@@ -154,6 +172,21 @@ class JasprRunProfileState(
                 "  pubspec.yaml doesn't declare jaspr.\n" +
                 "  Set \"Melos script\" under Modify Options, or create one via\n" +
                 "  Tools → Jaspr → Create Melos Script...\n\n",
+            ConsoleViewContentType.LOG_WARNING_OUTPUT,
+        )
+    }
+
+    private fun canSendDaemonCommands(): Boolean {
+        if (options.melosScript.isBlank()) return true
+        val melosConfig = project.basePath?.let { MelosWorkspaceDetector.detect(File(it))?.melosConfigFile } ?: return false
+        return MelosScriptInjector.usesInheritedStdio(melosConfig, options.melosScript)
+    }
+
+    private fun warnIfPortOptionsIgnored() {
+        if (!JasprDaemonFlags.hasIgnoredPortOptions(options, cliVersion)) return
+        serverConsole.print(
+            "⚠ \"Web port\" / \"Proxy port\" are ignored on jaspr_cli $cliVersion: " +
+                "since 0.24.0 ports are chosen automatically.\n\n",
             ConsoleViewContentType.LOG_WARNING_OUTPUT,
         )
     }
@@ -318,6 +351,7 @@ class JasprRunProfileState(
     private fun buildCommandLine(): GeneralCommandLine {
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project)
             ?: error("Dart SDK not configured. Go to Settings → Languages & Frameworks → Dart and set the SDK path.")
+        cliVersion = resolveCliVersion(sdkPath)
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
@@ -358,46 +392,19 @@ class JasprRunProfileState(
             { it }
         }
 
-        if (options.verbose) cmd.addParameter("--verbose")
-
-        options.input.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--input", rebasePath(it)) }
-
-        options.mode.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--mode", it) }
-
-        options.port.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--port", it) }
-
-        options.webPort.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--web-port", it) }
-
-        options.proxyPort.takeIf { it.isNotBlank() }
-            ?.let { cmd.addParameters("--proxy-port", it) }
-
-        when (options.buildMode) {
-            "debug"   -> cmd.addParameter("--debug")
-            "release" -> cmd.addParameter("--release")
-        }
-
-        if (options.experimentalWasm) cmd.addParameter("--experimental-wasm")
-        if (!options.managedBuildOptions) cmd.addParameter("--no-managed-build-options")
-        if (options.skipServer) cmd.addParameter("--skip-server")
-
-        addMultiValueParam(cmd, options.dartDefine, "--dart-define")
-        addMultiValueParam(cmd, options.dartDefineClient, "--dart-define-client")
-        addMultiValueParam(cmd, options.dartDefineServer, "--dart-define-server")
-        addMultiValueParam(cmd, options.dartDefineFromFile, "--dart-define-from-file", rebasePath)
+        cmd.addParameters(JasprDaemonFlags.build(options, cliVersion, rebasePath))
     }
 
-    private fun addMultiValueParam(
-        cmd: GeneralCommandLine,
-        raw: String,
-        flag: String,
-        transform: (String) -> String = { it },
-    ) {
-        raw.lines().map { it.trim() }.filter { it.isNotBlank() }
-            .forEach { cmd.addParameters(flag, transform(it)) }
+    /**
+     * Resolves the installed jaspr_cli version, preferring the value cached by
+     * [JasprToolingDaemonService] at project open. Only spawns `jaspr --version`
+     * when nothing is cached and we're off the EDT; otherwise returns null
+     * (treated as a pre-0.24 CLI by [JasprDaemonFlags]).
+     */
+    private fun resolveCliVersion(sdkPath: String): String? {
+        project.getService(JasprToolingDaemonService::class.java)?.cliVersion?.let { return it }
+        if (ApplicationManager.getApplication().isDispatchThread) return null
+        return runCatching { JasprTooling().readJasprCliVersion(sdkPath) }.getOrNull()
     }
 
     private fun resolvePathForMelosCwd(rawPath: String): String {

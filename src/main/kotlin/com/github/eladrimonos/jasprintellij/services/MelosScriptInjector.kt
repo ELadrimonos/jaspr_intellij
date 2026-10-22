@@ -31,12 +31,30 @@ object MelosScriptInjector {
 
     private const val EXEC_COMMAND = "dart pub global run jaspr_cli:jaspr daemon"
 
+    /** Extracts the package dir from a generated `run: cd "<dir>" && …` command. */
+    private val RUN_CD_REGEX = Regex("""^cd "([^"]*)" && """)
+
+    /** Filter key written by plugin versions <= 1.2.0; not a valid Melos package filter. */
+    private const val LEGACY_FILTER_KEY = "packageName"
+
     sealed class InjectionResult {
         data class Written(val changed: Boolean) : InjectionResult()
         data class ConflictExistingMelosSection(val message: String) : InjectionResult()
     }
 
     private data class InsertionPlan(val at: Int, val prefix: String, val baseIndent: String)
+
+    /**
+     * One managed script. With [relativeDir] (the package dir relative to the Melos
+     * config file's directory) the script is generated as `run: cd <dir> && …` with
+     * `stdio: inherit` — Melos >= 7.8.0 then forwards stdin, so `daemon.shutdown` and
+     * hot-reload commands reach the daemon. Without it, the `exec:` form is used,
+     * which works on older Melos but doesn't forward stdin.
+     */
+    data class ScriptEntry(val packageName: String, val relativeDir: String? = null)
+
+    /** First Melos version supporting `stdio: inherit` on scripts. */
+    const val INHERITED_STDIO_MELOS_VERSION = "7.8.0"
 
     /**
      * Ensures [targetFile] has an up-to-date, delimited `melos.scripts.<scriptName>`
@@ -46,14 +64,20 @@ object MelosScriptInjector {
      * every other script untouched. Idempotent: calling it again with the same
      * arguments leaves the file untouched.
      */
-    fun ensureScript(targetFile: File, scriptName: String, packageName: String): InjectionResult {
+    fun ensureScript(
+        targetFile: File,
+        scriptName: String,
+        packageName: String,
+        relativeDir: String? = null,
+    ): InjectionResult {
+        val entry = ScriptEntry(packageName, relativeDir)
         val originalText = if (targetFile.exists()) targetFile.readText(StandardCharsets.UTF_8) else ""
         val startIdx = indexOfLine(originalText, MARKER_START, from = 0)
         val matchedRange = startIdx?.let { findMatchedBlockRange(originalText, it) }
 
         val newText = if (matchedRange != null) {
             val indent = blockIndent(originalText, matchedRange.first)
-            val merged = parseManagedScripts(originalText, matchedRange, indent) + (scriptName to packageName)
+            val merged = parseManagedScripts(originalText, matchedRange, indent) + (scriptName to entry)
             val block = buildBlock(merged, indent)
             // matchedRange starts at the marker TEXT, not the line — replace from the
             // start of that line too, or the existing indent doubles up with the one
@@ -66,11 +90,64 @@ object MelosScriptInjector {
                     "Plugin doesn't understand (expected a mapping, optionally containing a 'scripts:' " +
                     "mapping). Add the '$scriptName' script to your existing 'melos.scripts' manually."
             )
-            val block = buildBlock(mapOf(scriptName to packageName), plan.baseIndent)
+            val block = buildBlock(mapOf(scriptName to entry), plan.baseIndent)
             originalText.substring(0, plan.at) + plan.prefix + block + originalText.substring(plan.at)
         }
 
         return InjectionResult.Written(writeIfChanged(targetFile, newText))
+    }
+
+    /**
+     * Rewrites an existing managed block that still uses the legacy `packageName`
+     * filter so it uses `scope`. Leaves everything else (and files without a managed
+     * block) untouched. Returns whether the file changed.
+     */
+    fun migrateLegacyFilters(targetFile: File): Boolean = migrateManagedBlock(targetFile)
+
+    /**
+     * Upgrades the managed block written by older plugin versions:
+     * - legacy `packageName` filters become `scope`;
+     * - when [resolveRelativeDir] is given (Melos supports `stdio: inherit`), `exec:`
+     *   entries whose package dir it can resolve are switched to the `run:` form.
+     * Leaves the file untouched when there's nothing to upgrade. Returns whether it changed.
+     */
+    fun migrateManagedBlock(targetFile: File, resolveRelativeDir: ((packageName: String) -> String?)? = null): Boolean {
+        if (!targetFile.exists()) return false
+        val originalText = targetFile.readText(StandardCharsets.UTF_8)
+        val startIdx = indexOfLine(originalText, MARKER_START, from = 0) ?: return false
+        val matchedRange = findMatchedBlockRange(originalText, startIdx) ?: return false
+
+        val indent = blockIndent(originalText, matchedRange.first)
+        val parsed = parseManagedScripts(originalText, matchedRange, indent)
+        if (parsed.isEmpty()) return false
+
+        val scripts = parsed.mapValues { (_, entry) ->
+            if (entry.relativeDir != null || resolveRelativeDir == null) entry
+            else entry.copy(relativeDir = resolveRelativeDir(entry.packageName))
+        }
+        val hasLegacyFilter = originalText.substring(matchedRange).contains("$LEGACY_FILTER_KEY:")
+        if (!hasLegacyFilter && scripts == parsed) return false
+
+        val replaceFrom = matchedRange.first - indent.length
+        val newText = originalText.substring(0, replaceFrom) + buildBlock(scripts, indent) +
+            originalText.substring(matchedRange.last + 1)
+        return writeIfChanged(targetFile, newText)
+    }
+
+    /** Single-quoted YAML scalar, so `"`, `&&` and `:` in the command need no further escaping. */
+    private fun yamlQuote(value: String): String = "'" + value.replace("'", "''") + "'"
+
+    /** Whether `melos.scripts.<scriptName>` in [targetFile] (ours or user-authored) uses `stdio: inherit`. */
+    fun usesInheritedStdio(targetFile: File, scriptName: String): Boolean {
+        if (!targetFile.exists()) return false
+        return try {
+            val map = Yaml().load(targetFile.readText(StandardCharsets.UTF_8)) as? Map<*, *> ?: return false
+            val scripts = (map["melos"] as? Map<*, *>)?.get("scripts") as? Map<*, *> ?: return false
+            (scripts[scriptName] as? Map<*, *>)?.get("stdio") == "inherit"
+        } catch (e: Exception) {
+            logger.warn("Could not read melos script $scriptName in ${targetFile.absolutePath}: ${e.message}")
+            false
+        }
     }
 
     /** All script names declared under `melos.scripts` in [targetFile] — ours and user-authored alike, sorted. */
@@ -141,15 +218,26 @@ object MelosScriptInjector {
         return InsertionPlan(at = scriptsNode.endMark.index, prefix = "\n", baseIndent = " ".repeat(entryIndent))
     }
 
-    private fun buildBlock(scripts: Map<String, String>, baseIndent: String): String = buildString {
+    private fun buildBlock(scripts: Map<String, ScriptEntry>, baseIndent: String): String = buildString {
         appendLine("$baseIndent$MARKER_START")
-        for ((name, packageName) in scripts.toSortedMap()) {
+        for ((name, entry) in scripts.toSortedMap()) {
+            val packageName = entry.packageName
             appendLine("$baseIndent$name:")
             appendLine("${baseIndent}  description: \"Jaspr Daemon using Melos (auto-generated by Jaspr IntelliJ Plugin)\"")
-            appendLine("${baseIndent}  exec:")
-            appendLine("${baseIndent}    command: $EXEC_COMMAND")
+            if (entry.relativeDir != null) {
+                // `cd` + `&&` behaves the same in sh and cmd.exe; Melos appends the
+                // arguments given after `--` to the end of the command.
+                appendLine("${baseIndent}  run: ${yamlQuote("cd \"${entry.relativeDir}\" && $EXEC_COMMAND")}")
+                appendLine("${baseIndent}  stdio: inherit")
+            } else {
+                appendLine("${baseIndent}  exec:")
+                appendLine("${baseIndent}    command: $EXEC_COMMAND")
+            }
             appendLine("${baseIndent}  packageFilters:")
-            appendLine("${baseIndent}    packageName: $packageName")
+            // `scope` is Melos' package-name filter. Older plugin versions wrote
+            // `packageName`, which Melos silently ignores — running the daemon in
+            // every package and prefixing each output line with "[package]: ".
+            appendLine("${baseIndent}    scope: $packageName")
         }
         append("$baseIndent$MARKER_END")
     }
@@ -189,7 +277,7 @@ object MelosScriptInjector {
      * Also understands the legacy (pre-nesting-fix) shape where the whole `melos:
      * scripts:` header lived inside the markers, for back-compat with older blocks.
      */
-    private fun parseManagedScripts(text: String, matchedRange: IntRange, indent: String): Map<String, String> {
+    private fun parseManagedScripts(text: String, matchedRange: IntRange, indent: String): Map<String, ScriptEntry> {
         val innerStart = matchedRange.first + MARKER_START.length
         val innerEnd = matchedRange.last + 1 - MARKER_END.length
         if (innerEnd <= innerStart) return emptyMap()
@@ -200,9 +288,12 @@ object MelosScriptInjector {
             val map = Yaml().load(dedented) as? Map<*, *> ?: return emptyMap()
             val scriptsMap = (map["melos"] as? Map<*, *>)?.get("scripts") as? Map<*, *> ?: map
             scriptsMap.mapNotNull { (name, value) ->
-                val packageName = ((value as? Map<*, *>)?.get("packageFilters") as? Map<*, *>)
-                    ?.get("packageName") as? String
-                if (name is String && packageName != null) name to packageName else null
+                val script = value as? Map<*, *>
+                val filters = script?.get("packageFilters") as? Map<*, *>
+                val packageName = (filters?.get("scope") ?: filters?.get(LEGACY_FILTER_KEY)) as? String
+                val relativeDir = (script?.get("run") as? String)
+                    ?.let { RUN_CD_REGEX.find(it)?.groupValues?.get(1) }
+                if (name is String && packageName != null) name to ScriptEntry(packageName, relativeDir) else null
             }.toMap()
         } catch (e: Exception) {
             logger.warn("Could not parse existing managed melos scripts: ${e.message}")

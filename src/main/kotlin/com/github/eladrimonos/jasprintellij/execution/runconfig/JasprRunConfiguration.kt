@@ -53,6 +53,7 @@ class JasprRunConfiguration(
         JDOMExternalizerUtil.writeField(element, "verbose", verbose.toString())
         JDOMExternalizerUtil.writeField(element, "experimentalWasm", experimentalWasm.toString())
         JDOMExternalizerUtil.writeField(element, "skipServer", skipServer.toString())
+        JDOMExternalizerUtil.writeField(element, "openDevTools", openDevTools.toString())
         JDOMExternalizerUtil.writeField(element, "managedBuildOptions", managedBuildOptions.toString())
     }
 
@@ -77,6 +78,7 @@ class JasprRunConfiguration(
         verbose = JDOMExternalizerUtil.readField(element, "verbose")?.toBoolean() ?: false
         experimentalWasm = JDOMExternalizerUtil.readField(element, "experimentalWasm")?.toBoolean() ?: false
         skipServer = JDOMExternalizerUtil.readField(element, "skipServer")?.toBoolean() ?: false
+        openDevTools = JDOMExternalizerUtil.readField(element, "openDevTools")?.toBoolean() ?: false
 
         // managedBuildOptions defaults to true
         managedBuildOptions = JDOMExternalizerUtil.readField(element, "managedBuildOptions")?.toBoolean() ?: true
@@ -125,6 +127,10 @@ class JasprRunConfiguration(
     var skipServer: Boolean
         get() = options.skipServer
         set(v) { options.skipServer = v }
+
+    var openDevTools: Boolean
+        get() = options.openDevTools
+        set(v) { options.openDevTools = v }
 
     var managedBuildOptions: Boolean
         get() = options.managedBuildOptions

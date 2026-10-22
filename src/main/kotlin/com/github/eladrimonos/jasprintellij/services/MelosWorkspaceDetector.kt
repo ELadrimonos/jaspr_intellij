@@ -81,6 +81,20 @@ object MelosWorkspaceDetector {
         }.sorted()
     }
 
+    /**
+     * The directory of the member package named [packageName], relative to the
+     * directory holding [WorkspaceInfo.melosConfigFile] and using `/` separators,
+     * or null if it isn't one of the declared workspace members.
+     */
+    fun resolveMemberPackageRelativeDir(info: WorkspaceInfo, packageName: String): String? {
+        val configDir = info.melosConfigFile.absoluteFile.parentFile ?: return null
+        return info.memberPackagePaths.firstNotNullOfOrNull { relativePath ->
+            val dir = File(info.workspaceRoot, relativePath)
+            val name = loadYamlMap(File(dir, "pubspec.yaml"))?.get("name") as? String
+            if (name == packageName) dir.absoluteFile.relativeTo(configDir).invariantSeparatorsPath else null
+        }
+    }
+
     private fun parsePubspecWorkspaceField(pubspec: File): List<String>? {
         val map = loadYamlMap(pubspec) ?: return null
         @Suppress("UNCHECKED_CAST")

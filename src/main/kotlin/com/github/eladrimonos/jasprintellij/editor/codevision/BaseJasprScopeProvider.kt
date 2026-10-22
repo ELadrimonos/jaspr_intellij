@@ -17,6 +17,11 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.SyntaxTraverser
 import com.jetbrains.lang.dart.psi.DartClassDefinition
 import java.awt.event.MouseEvent
+import com.intellij.openapi.ui.popup.JBPopupFactory
+import com.intellij.openapi.ui.popup.PopupStep
+import com.intellij.openapi.ui.popup.util.BaseListPopupStep
+import com.intellij.ui.awt.RelativePoint
+import java.io.File
 import java.net.URI
 
 abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
@@ -60,15 +65,15 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
 
                         when (id) {
                             "jaspr.component.scopes.server" -> {
-                                if (scopeData.serverScopeRoots.isNotEmpty()) {
-                                    val url = scopeData.serverScopeRoots.first().toNavigationUrl()
+                                val roots = scopeData.serverScopeRoots
+                                if (roots.isNotEmpty()) {
                                     results.add(
                                         range to ClickableTextCodeVisionEntry(
                                             text = JasprBundle.message("jaspr.component.scopes.server.label"),
                                             providerId = id,
                                             icon = JasprIcons.Server,
-                                            onClick = { _: MouseEvent?, ed: Editor ->
-                                                JasprScopeNavigationHandler.navigate(ed, url)
+                                            onClick = { event: MouseEvent?, ed: Editor ->
+                                                JasprScopeNavigationHandler.navigateToRoots(ed, event, roots)
                                             }
                                         )
                                     )
@@ -76,15 +81,15 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                             }
 
                             "jaspr.component.scopes.client" -> {
-                                if (scopeData.clientScopeRoots.isNotEmpty()) {
-                                    val url = scopeData.clientScopeRoots.first().toNavigationUrl()
+                                val roots = scopeData.clientScopeRoots
+                                if (roots.isNotEmpty()) {
                                     results.add(
                                         range to ClickableTextCodeVisionEntry(
                                             text = JasprBundle.message("jaspr.component.scopes.client.label"),
                                             providerId = id,
                                             icon = JasprIcons.Client,
-                                            onClick = { _: MouseEvent?, ed: Editor ->
-                                                JasprScopeNavigationHandler.navigate(ed, url)
+                                            onClick = { event: MouseEvent?, ed: Editor ->
+                                                JasprScopeNavigationHandler.navigateToRoots(ed, event, roots)
                                             }
                                         )
                                     )
@@ -111,9 +116,6 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
         return results
     }
 
-    private fun JasprToolingDaemonService.ScopeTarget.toNavigationUrl(): String =
-        url ?: "file://$path#$line"
-
     companion object {
         private const val HINT_URL =
             "https://docs.jaspr.site/dev/server#component-scopes"
@@ -122,6 +124,42 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
 
 class JasprScopeNavigationHandler {
     companion object {
+        /**
+         * Navigates to the scope root, or — when the component is rendered from several
+         * roots — lets the user pick one from a popup.
+         */
+        fun navigateToRoots(
+            editor: Editor,
+            event: MouseEvent?,
+            roots: List<JasprToolingDaemonService.ScopeTarget>,
+        ) {
+            if (roots.size == 1) {
+                navigate(editor, roots.single().toNavigationUrl())
+                return
+            }
+
+            val step = object : BaseListPopupStep<JasprToolingDaemonService.ScopeTarget>(
+                JasprBundle.message("jaspr.component.scopes.roots.popup.title"),
+                roots,
+            ) {
+                override fun getTextFor(value: JasprToolingDaemonService.ScopeTarget): String =
+                    "${File(value.path).name}:${value.line}"
+
+                override fun onChosen(
+                    selectedValue: JasprToolingDaemonService.ScopeTarget,
+                    finalChoice: Boolean,
+                ): PopupStep<*>? {
+                    navigate(editor, selectedValue.toNavigationUrl())
+                    return FINAL_CHOICE
+                }
+            }
+            val popup = JBPopupFactory.getInstance().createListPopup(step)
+            if (event != null) popup.show(RelativePoint(event)) else popup.showInBestPositionFor(editor)
+        }
+
+        internal fun JasprToolingDaemonService.ScopeTarget.toNavigationUrl(): String =
+            url ?: "file://$path#$line"
+
         fun navigate(editor: Editor, raw: String) {
             val project = editor.project ?: return
 

@@ -1,6 +1,8 @@
 package com.github.eladrimonos.jasprintellij.actions
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
 import com.intellij.execution.Executor
 import com.intellij.execution.configurations.GeneralCommandLine
@@ -46,7 +48,8 @@ abstract class JasprTerminalAction(
         val cmd = GeneralCommandLine()
             .withExePath(dartExe)
             .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(project.basePath)
+            // In a workspace/Melos monorepo, run against the Jaspr member package.
+            .withWorkDirectory(JasprTooling.findJasprProjectDir(project)?.path ?: project.basePath)
 
         if (isGlobalActivation) {
             cmd.addParameters("pub", "global", "activate", "jaspr_cli")
@@ -87,7 +90,7 @@ abstract class JasprTerminalAction(
     private fun notifyError(project: Project) {
         NotificationGroupManager.getInstance()
             .getNotificationGroup("JasprIntelliJ")
-            .createNotification("Jaspr", "Dart SDK is not configured for this project.", NotificationType.ERROR)
+            .createNotification("Jaspr", JasprBundle.message("jaspr.notification.sdk.missing"), NotificationType.ERROR)
             .setIcon(JasprIcons.JasprLogo)
             .notify(project)
     }

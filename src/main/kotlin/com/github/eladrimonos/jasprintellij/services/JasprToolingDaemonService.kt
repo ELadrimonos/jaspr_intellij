@@ -16,11 +16,14 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.SystemInfo
+import com.intellij.ui.EditorNotifications
 import com.intellij.util.FileContentUtilCore
 import java.io.File
 import java.net.URI
 import java.nio.charset.StandardCharsets
+import com.intellij.util.concurrency.AppExecutorUtil
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 @Service(Service.Level.PROJECT)
@@ -38,6 +41,12 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     var daemonPid: Long? = null
 
     var cliVersion: String? = null
+        set(value) {
+            val changed = field != value
+            field = value
+            // The CLI version mismatch banner depends on it (see JasprCliVersionMismatchNotificationProvider).
+            if (changed && !project.isDisposed) EditorNotifications.getInstance(project).updateAllNotifications()
+        }
 
     @JasprLegacy("Request ID", "0.23.0")
     private var nextId = 1
@@ -45,13 +54,21 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     @JasprLegacy("Pending requests map", "0.23.0")
     private val pendingRequests = mutableMapOf<Int, CompletableFuture<Any?>>()
     
-    private val fileScopes = mutableMapOf<String, FileComponentScopes>()
+    /**
+     * Scope data per normalized Dart file path. Read from background read-action threads
+     * (CodeVision) while being replaced from the scopes watcher / daemon output threads, so it
+     * is an immutable map published through a volatile reference: writers build a complete
+     * new map and swap it in with a single assignment, readers read the reference once.
+     */
+    @Volatile
+    private var fileScopes: Map<String, FileComponentScopes> = emptyMap()
 
     @JasprLegacy("Output buffer for daemon stream", "0.23.0")
     private val outputBuffer = StringBuilder()
 
     internal var useFileSystemScopes = false
-    private var watchThread: Thread? = null
+    private var watchTask: ScheduledFuture<*>? = null
+    @Volatile
     private var scopesFileLastModified: Long = 0
 
     /**
@@ -66,13 +83,18 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     val isAlive: Boolean
         get() = useFileSystemScopes || (processHandler?.isProcessTerminated == false)
 
-    fun start() {
+    /**
+     * Starts scope tooling for the installed jaspr_cli. Pass [knownCliVersion] when the
+     * caller has just read it (e.g. from [JasprTooling.preflightCheck]) to avoid
+     * spawning `jaspr --version` again.
+     */
+    fun start(knownCliVersion: String? = null) {
         if (isAlive) return
 
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return
         val tooling = JasprTooling()
 
-        cliVersion = tooling.readJasprCliVersion(sdkPath)
+        cliVersion = knownCliVersion ?: tooling.readJasprCliVersion(sdkPath)
         logger.info("Jaspr Tooling: cliVersion=$cliVersion")
 
         if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
@@ -126,7 +148,7 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
                     daemonVersion = null
                     daemonPid = null
                     nextId = 1
-                    fileScopes.clear()
+                    fileScopes = emptyMap()
                     pendingRequests.values.forEach { it.cancel(true) }
                     pendingRequests.clear()
                     synchronized(outputBuffer) { outputBuffer.setLength(0) }
@@ -163,31 +185,25 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             loadScopesFromFile(scopesFile)
         }
 
-        watchThread = kotlin.concurrent.thread(isDaemon = true, name = "JasprScopesWatcher") {
-            try {
-                while (!Thread.currentThread().isInterrupted) {
-                    Thread.sleep(2000)
-                    if (scopesFile.exists()) {
-                        val currentModified = scopesFile.lastModified()
-                        if (currentModified > scopesFileLastModified) {
-                            scopesFileLastModified = currentModified
-                            loadScopesFromFile(scopesFile)
-                        }
-                    } else {
-                        if (scopesFileLastModified > 0) {
-                            scopesFileLastModified = 0
-                            fileScopes.clear()
-                            ApplicationManager.getApplication().invokeLater { refreshHintsForOpenFiles() }
-                        }
-                    }
+        // .dart_tool is excluded from the VFS, so poll the file's mtime on the shared
+        // scheduler instead of relying on VFS events. Cancelled in stop().
+        watchTask = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay({
+            if (scopesFile.exists()) {
+                val currentModified = scopesFile.lastModified()
+                if (currentModified > scopesFileLastModified) {
+                    scopesFileLastModified = currentModified
+                    loadScopesFromFile(scopesFile)
                 }
-            } catch (e: InterruptedException) {
-                // Thread interrupted, exit gracefully
+            } else if (scopesFileLastModified > 0) {
+                scopesFileLastModified = 0
+                val removed = fileScopes.keys
+                fileScopes = emptyMap()
+                refreshHintsForOpenFiles(removed)
             }
-        }
+        }, SCOPES_POLL_INTERVAL_SECONDS, SCOPES_POLL_INTERVAL_SECONDS, TimeUnit.SECONDS)
     }
 
-    private fun loadScopesFromFile(file: File) {
+    internal fun loadScopesFromFile(file: File) {
         try {
             val content = file.readText(StandardCharsets.UTF_8)
             val type = object : TypeToken<Map<String, Any>>() {}.type
@@ -208,7 +224,9 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
                 )
             }
 
-            fileScopes.clear()
+            // Build the complete map locally and publish it in one assignment, so readers never
+            // observe an empty or partially filled map mid-reload.
+            val newScopes = LinkedHashMap<String, FileComponentScopes>()
 
             for ((rawPath, scopeData) in scopesRaw) {
                 val filePath = normalizePath(rawPath)
@@ -222,24 +240,27 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
                 val serverTargets = serverRootIds.mapNotNull { locations[it]?.toScopeTarget() }
                 val clientTargets = clientRootIds.mapNotNull { locations[it]?.toScopeTarget() }
 
-                fileScopes[filePath] = FileComponentScopes(
+                newScopes[filePath] = FileComponentScopes(
                     components = componentNames,
                     serverScopeRoots = serverTargets,
                     clientScopeRoots = clientTargets
                 )
             }
 
+            val previousScopes = fileScopes
+            fileScopes = newScopes
+
             logger.info(
-                "Jaspr Tooling: loaded scopes.json — files=${fileScopes.size}, " +
-                    "components=${fileScopes.values.sumOf { it.components.size }}"
+                "Jaspr Tooling: loaded scopes.json — files=${newScopes.size}, " +
+                    "components=${newScopes.values.sumOf { it.components.size }}"
             )
-            if (fileScopes.isNotEmpty()) {
-                logger.info("Jaspr Tooling: known scope file paths: ${fileScopes.keys.take(10)}")
+            if (newScopes.isNotEmpty()) {
+                logger.info("Jaspr Tooling: known scope file paths: ${newScopes.keys.take(10)}")
             }
 
-            ApplicationManager.getApplication().invokeLater {
-                refreshHintsForOpenFiles()
-            }
+            // scopes.json is rewritten on every rebuild; only touch editors whose scopes changed.
+            val changed = changedScopePaths(previousScopes, newScopes)
+            if (changed.isNotEmpty()) refreshHintsForOpenFiles(changed)
         } catch (e: Exception) {
             logger.warn("Failed to load scopes from file: ${e.message}", e)
         }
@@ -249,12 +270,16 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
     // HTML conversion
     // -------------------------------------------------------------------------
 
-    fun convertHtml(html: String, filePath: String? = null): String? {
+    /**
+     * Converts an HTML fragment (e.g. the contents of `<body>`) to Jaspr component code.
+     * Several top-level nodes come back as a `.fragment([...])` expression.
+     */
+    fun convertHtml(html: String): String? {
         val sdkPath = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project) ?: return null
         val tooling = JasprTooling()
-        
+
         if (tooling.isVersionAtLeast(cliVersion, "0.23.0")) {
-            return convertHtmlViaCli(sdkPath, html, filePath)
+            return convertHtmlViaCli(sdkPath, html)
         }
 
         if (!isAlive) return null
@@ -266,7 +291,9 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         sendCommand(mapOf(
             "id"     to id,
             "method" to "html.convert",
-            "params" to mapOf("html" to html),
+            // The legacy daemon converts parseFragment(html).firstChild only, so wrap
+            // everything in a single root element.
+            "params" to mapOf("html" to "<div>$html</div>"),
         ))
 
         return try {
@@ -278,32 +305,43 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
         }
     }
 
-    private fun convertHtmlViaCli(sdkPath: String, html: String, filePath: String?): String? {
+    private fun convertHtmlViaCli(sdkPath: String, html: String): String? {
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
-        val params = mutableListOf("pub", "global", "run", "jaspr_cli:jaspr", "convert-html")
-        if (filePath != null) {
-            params.add("--file")
-            params.add(filePath)
-        } else {
-            params.add("--html")
-            // The CLI expects the HTML string to be JSON-encoded
-            params.add(gson.toJson(html))
-        }
+        // Pass the HTML through a temp file rather than `--html <json>`: large pages
+        // would exceed the command-line length limit (32 KB on Windows).
+        val input = File.createTempFile("jaspr_convert_", ".html")
+        try {
+            input.writeText(html, StandardCharsets.UTF_8)
 
-        val cmd = GeneralCommandLine()
-            .withExePath(dartExe)
-            .withParameters(params)
-            .withCharset(StandardCharsets.UTF_8)
-            .withWorkDirectory(jasprProjectDir)
+            val cmd = GeneralCommandLine()
+                .withExePath(dartExe)
+                .withParameters("pub", "global", "run", "jaspr_cli:jaspr", "convert-html", "--json", "--file", input.absolutePath)
+                .withCharset(StandardCharsets.UTF_8)
+                .withWorkDirectory(jasprProjectDir)
 
-        val out = DefaultCliRunner.run(cmd)
-        if (out.exitCode != 0) {
-            logger.warn("Jaspr CLI convert-html failed: ${out.stderr}")
-            return null
+            val out = DefaultCliRunner.run(cmd)
+            if (out.exitCode != 0) {
+                logger.warn("Jaspr CLI convert-html failed: ${out.stderr}\n${out.stdout}")
+                return null
+            }
+            return parseConvertHtmlOutput(out.stdout)
+        } finally {
+            input.delete()
         }
-        return out.stdout.trim()
+    }
+
+    /**
+     * Extracts the converted code from `convert-html --json` output. jaspr_cli may
+     * print other text first (e.g. an "Update available!" box), so only the JSON
+     * object line is used.
+     */
+    internal fun parseConvertHtmlOutput(stdout: String): String? {
+        val jsonLine = stdout.lineSequence().map { it.trim() }.lastOrNull { it.startsWith("{") } ?: return null
+        return runCatching {
+            gson.fromJson(jsonLine, Map::class.java)?.get("result") as? String
+        }.getOrNull()?.takeIf { it.isNotBlank() }
     }
 
     // -------------------------------------------------------------------------
@@ -366,18 +404,28 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     fun getScopesForFile(filePath: String): FileComponentScopes? {
         val normalizedPath = normalizePath(filePath)
-        val scopes = fileScopes[normalizedPath]
-        if (scopes == null && fileScopes.isNotEmpty()) {
-            logger.info("Jaspr Tooling: no scopes found for $normalizedPath. Known paths: ${fileScopes.keys.size}")
+        val snapshot = fileScopes
+        val scopes = snapshot[normalizedPath]
+        if (scopes == null && snapshot.isNotEmpty()) {
+            logger.info("Jaspr Tooling: no scopes found for $normalizedPath. Known paths: ${snapshot.keys.size}")
         }
         return scopes
     }
 
-    fun refreshHintsForOpenFiles() {
+    /**
+     * Refreshes CodeVision for open Dart editors. With [changedPaths] (normalized, as
+     * produced by [normalizePath]) only those files are refreshed; null means all.
+     */
+    fun refreshHintsForOpenFiles(changedPaths: Set<String>? = null) {
         if (project.isDisposed) return
 
         ApplicationManager.getApplication().invokeLater {
             if (project.isDisposed) return@invokeLater
+
+            val openDartFiles = FileEditorManager.getInstance(project).openFiles
+                .filter { it.extension == "dart" }
+                .filter { changedPaths == null || normalizePath(it.path) in changedPaths }
+            if (openDartFiles.isEmpty()) return@invokeLater
 
             DaemonCodeAnalyzer.getInstance(project).restart()
 
@@ -386,28 +434,34 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
             // does not invalidate, so tabs opened before scope data was ready would
             // otherwise keep showing no CodeVision until manually closed and reopened.
             // Force a real reparse of those open Dart files so CodeVision recomputes.
-            val openDartFiles = FileEditorManager.getInstance(project).openFiles
-                .filter { it.extension == "dart" }
-            if (openDartFiles.isNotEmpty()) {
-                FileContentUtilCore.reparseFiles(openDartFiles)
-            }
+            FileContentUtilCore.reparseFiles(openDartFiles)
         }
     }
+
+    /** Paths whose scope data differs between [old] and [new] (added, removed or changed). */
+    internal fun changedScopePaths(
+        old: Map<String, FileComponentScopes>,
+        new: Map<String, FileComponentScopes>,
+    ): Set<String> = (old.keys + new.keys).filterTo(HashSet()) { old[it] != new[it] }
 
     @Suppress("UNCHECKED_CAST")
     private fun handleScopesResultEvent(params: Map<String, Any>?) {
         if (params == null) return
         logger.debug("JASPR DAEMON scopes.result received. Files=${params.size}")
 
+        val newEntries = LinkedHashMap<String, FileComponentScopes>()
         for ((rawPath, data) in params) {
             val file = normalizePath(rawPath)
             val map = data as? Map<String, Any> ?: continue
-            fileScopes[file] = FileComponentScopes(
+            newEntries[file] = FileComponentScopes(
                 components      = (map["components"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
                 serverScopeRoots = parseScopeTargets(map["serverScopeRoots"]),
                 clientScopeRoots = parseScopeTargets(map["clientScopeRoots"]),
             )
         }
+        // Copy-on-write merge. Only the daemon output thread writes incrementally, so a plain
+        // read-modify-write of the volatile reference is sufficient here.
+        fileScopes = fileScopes + newEntries
 
         ApplicationManager.getApplication().invokeLater {
             refreshHintsForOpenFiles()
@@ -463,21 +517,31 @@ class JasprToolingDaemonService(private val project: Project) : Disposable {
 
     override fun dispose() = stop()
 
+    /** Re-reads the jaspr_cli version and restarts scope tooling, e.g. after a CLI update. */
+    fun restart() {
+        stop()
+        start()
+    }
+
     fun stop() {
         processHandler?.let {
             if (!it.isProcessTerminated) it.destroyProcess()
             processHandler = null
         }
-        watchThread?.interrupt()
-        watchThread = null
+        watchTask?.cancel(false)
+        watchTask = null
         
         // Reset state for clean restarts (important for tests and SDK changes)
         useFileSystemScopes = false
         cliVersion = null
         daemonVersion = null
         daemonPid = null
-        fileScopes.clear()
+        fileScopes = emptyMap()
         synchronized(outputBuffer) { outputBuffer.setLength(0) }
+    }
+
+    companion object {
+        private const val SCOPES_POLL_INTERVAL_SECONDS = 2L
     }
 
     // -------------------------------------------------------------------------
