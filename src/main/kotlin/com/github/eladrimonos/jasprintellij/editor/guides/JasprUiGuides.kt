@@ -13,6 +13,8 @@ import com.jetbrains.lang.dart.psi.DartArguments
 import com.jetbrains.lang.dart.psi.DartCallExpression
 import com.jetbrains.lang.dart.psi.DartComponent
 import com.jetbrains.lang.dart.psi.DartFile
+import com.jetbrains.lang.dart.psi.DartForElement
+import com.jetbrains.lang.dart.psi.DartIfElement
 import com.jetbrains.lang.dart.psi.DartListLiteralExpression
 import com.jetbrains.lang.dart.psi.DartNewExpression
 import com.jetbrains.lang.dart.psi.DartReturnType
@@ -62,7 +64,7 @@ object JasprUiGuides {
     internal fun compute(file: PsiFile): List<JasprUiGuide> {
         val text = file.viewProvider.contents
         return SyntaxTraverser.psiTraverser(file)
-            .filter { it is DartCallExpression || it is DartNewExpression }
+            .filter { it is DartCallExpression || it is DartNewExpression || it is DartForElement || it is DartIfElement }
             .filter { !isStyleRule(it) && isInComponentScope(it) }
             .mapNotNull { node -> guideFor(node, text) }
             .toList()
@@ -90,12 +92,15 @@ object JasprUiGuides {
 
     /**
      * The elements the guide branches off to: each element of a children list (including
-     * `if`, `for` and spread elements), or the named argument holding a single child.
+     * `if`, `for` and spread elements), or the named argument holding a single child. A
+     * collection `for` branches off to its body, a collection `if` to its then/else elements.
      */
     private fun childrenOf(node: PsiElement): List<PsiElement> {
         val arguments = when (node) {
             is DartCallExpression -> node.arguments
             is DartNewExpression -> node.arguments
+            is DartForElement -> return listOfNotNull(node.element)
+            is DartIfElement -> return node.elementList
             else -> null
         }?.let(DartArguments::getArgumentList) ?: return emptyList()
 
