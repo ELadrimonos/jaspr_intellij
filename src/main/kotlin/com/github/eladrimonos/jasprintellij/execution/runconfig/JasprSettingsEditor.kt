@@ -16,6 +16,7 @@ import com.intellij.ui.components.fields.ExpandableTextField
 import java.awt.BorderLayout
 import java.io.File
 import java.util.function.Predicate
+import javax.swing.JList
 
 class JasprSettingsEditor(
     runConfiguration: JasprRunConfiguration,
@@ -35,9 +36,11 @@ class JasprSettingsEditor(
             JasprTooling.findJasprProjectDirs(project).map { JasprPackageDir.toStored(dir, it) }
         }.orEmpty()
         val packageCombo = ComboBox(arrayOf("") + packageDirs).apply {
-            renderer = SimpleListCellRenderer.create("") { value ->
-                if (value.isNullOrEmpty()) "Auto (${packageDirs.firstOrNull()?.ifEmpty { "project root" } ?: "project root"})"
-                else value
+            renderer = object : SimpleListCellRenderer<String>() {
+                override fun customize(list: JList<out String>, value: String?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = if (value.isNullOrEmpty()) "Auto (${packageDirs.firstOrNull()?.ifEmpty { "project root" } ?: "project root"})"
+                    else value
+                }
             }
             toolTipText = "Package the daemon runs in. Ignored when a Melos script is set."
         }
