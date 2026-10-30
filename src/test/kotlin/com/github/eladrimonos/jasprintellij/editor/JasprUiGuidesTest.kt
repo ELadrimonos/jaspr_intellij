@@ -66,6 +66,57 @@ class JasprUiGuidesTest : BasePlatformTestCase() {
             listOf(
                 "1:2 -> body: ul([",
                 "2:4 -> if (header) li([.text('Header')]), | for (final item in items) | ...extra,",
+                "4:6 -> li([.text(item)]),",
+            ),
+            describe(file, JasprUiGuides.compute(file)),
+        )
+    }
+
+    fun testCollectionForBranchesToItsBody() {
+        val file = jasprFile(
+            """
+            Component nav(String activePath) {
+              return header([
+                nav([
+                  for (var route in [
+                    (label: 'Home', path: '/'),
+                  ])
+                    div(classes: 'item', [
+                      Link(to: route.path),
+                    ]),
+                ]),
+              ]);
+            }
+            """
+        )
+        assertEquals(
+            listOf(
+                "1:2 -> nav([",
+                "2:4 -> for (var route in [",
+                "3:6 -> div(classes: 'item', [",
+                "6:8 -> Link(to: route.path),",
+            ),
+            describe(file, JasprUiGuides.compute(file)),
+        )
+    }
+
+    fun testCollectionIfBranchesToThenAndElse() {
+        val file = jasprFile(
+            """
+            Component status(bool ok) {
+              return div([
+                if (ok)
+                  span([.text('ok')])
+                else
+                  span([.text('error')]),
+              ]);
+            }
+            """
+        )
+        assertEquals(
+            listOf(
+                "1:2 -> if (ok)",
+                "2:4 -> span([.text('ok')]) | span([.text('error')]),",
             ),
             describe(file, JasprUiGuides.compute(file)),
         )
