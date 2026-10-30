@@ -25,6 +25,10 @@ auto-generated Melos script.</p>
 <p>Inline code vision hints show whether a component renders on the server or the client, based on the scope
 data the Jaspr CLI writes while your app is running.</p>
 
+<h3>UI Guides</h3>
+<p>Lines in the editor connect each component to its children, so deeply nested element trees stay readable.
+Toggle them in <b>Settings | Languages &amp; Frameworks | Jaspr</b>.</p>
+
 <h3>HTML to Jaspr Conversion</h3>
 <p>Right-click any <code>.html</code> file and select <b>Convert to Jaspr</b> to generate the equivalent Dart component.</p>
 
@@ -110,6 +114,18 @@ mismatch notifications and formatted console output. Supports Jaspr 0.22 to 0.24
                 level="WARNING"
                 shortName="JasprNestedSelectorConcatenation"
                 implementationClass="com.github.eladrimonos.jasprintellij.inspection.JasprNestedSelectorConcatenationInspection"/>
+
+        <highlightingPassFactory
+                implementation="com.github.eladrimonos.jasprintellij.editor.guides.JasprUiGuidesPassFactory"/>
+        <daemon.indentsPassFilter
+                implementation="com.github.eladrimonos.jasprintellij.editor.guides.JasprIndentsPassFilter"/>
+
+        <applicationConfigurable
+                parentId="language"
+                id="jaspr.settings"
+                bundle="messages.JasprBundle"
+                key="jaspr.settings.display.name"
+                instance="com.github.eladrimonos.jasprintellij.settings.JasprConfigurable"/>
 
         <editorNotificationProvider
                 implementation="com.github.eladrimonos.jasprintellij.editor.JasprCliVersionMismatchNotificationProvider"/>
