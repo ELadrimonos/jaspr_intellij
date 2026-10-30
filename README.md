@@ -36,7 +36,8 @@ Instantly migrate your existing HTML templates to Jaspr components.
 - `inhc` — new `InheritedComponent` class
 - `jhtml` — html component
 - `jtext` — text component
-- `jstyls` — style sheet
+- `jstyls` — component styles (`@css static` getter, inside a class)
+- `jstylsg` — global styles (`@css` top-level variable)
 - `jevt` — generic event handler
 - `jclick` — click event handler
 
@@ -45,7 +46,7 @@ Instantly migrate your existing HTML templates to Jaspr components.
 - **Daemon Status:** Check the connectivity and health of the Jaspr tooling daemon.
 - **Version Check:** Notification when `jaspr_cli` and `pubspec.yaml` versions differ.
 - **Update CLI:** Easily update the Jaspr CLI from the Tools menu.
-- **Inspections:** Detect common errors, such as multiple scope annotations on the same component.
+- **Inspections:** Detect common errors, such as multiple scope annotations on the same component, or nested `css()` selectors like `&-active` that stopped concatenating with Jaspr 0.24's native CSS nesting (with a quick fix).
 
 ## Roadmap
 

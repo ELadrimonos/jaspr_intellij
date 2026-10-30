@@ -1,11 +1,13 @@
 package com.github.eladrimonos.jasprintellij.module
 
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.jetbrains.lang.dart.sdk.DartSdkLibUtil
 import org.jetbrains.jps.model.java.JavaResourceRootType
 import java.io.File
@@ -63,35 +65,49 @@ object JasprModuleConfigurator {
             rootModel.commit()
         }
 
-        // 2. Apply Dart/Jaspr configuration to every module (idempotent).
+        // 2. Apply Dart/Jaspr configuration to the module(s) containing the Jaspr
+        //    package (idempotent). Other modules in the project are left alone.
+        val jasprDir = JasprTooling.findJasprProjectDir(project) ?: projectDir
         for (module in moduleManager.modules) {
-            configureModule(module, projectDir)
+            if (!containsDir(module, jasprDir)) continue
+            configureModule(module, jasprDir)
         }
     }
 
-    private fun configureModule(module: Module, projectDir: File) {
+    private fun containsDir(module: Module, dir: File): Boolean {
+        val dirVf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(dir) ?: return false
+        return ModuleRootManager.getInstance(module).contentRoots.any { VfsUtilCore.isAncestor(it, dirVf, false) }
+    }
+
+    private fun configureModule(module: Module, jasprDir: File) {
         // Enable the Dart SDK so the IDE indexes sources correctly.
-        DartSdkLibUtil.enableDartSdk(module)
+        if (!DartSdkLibUtil.isDartSdkEnabled(module)) {
+            DartSdkLibUtil.enableDartSdk(module)
+        }
 
         val model = ModuleRootManager.getInstance(module).modifiableModel
         try {
+            val jasprVf = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(jasprDir) ?: run {
+                model.dispose()
+                return
+            }
+            // Static assets: mark "web/images" as a resource root when it exists.
+            val imagesVf = LocalFileSystem.getInstance()
+                .refreshAndFindFileByIoFile(File(jasprDir, "web/images"))
+
             for (contentEntry in model.contentEntries) {
-                val entryUrl = contentEntry.url
+                val entryFile = contentEntry.file ?: continue
+                if (!VfsUtilCore.isAncestor(entryFile, jasprVf, false)) continue
+
                 val existingExcludes = contentEntry.excludeFolders.map { it.url }.toSet()
 
                 // Standard Dart/Jaspr directories that should be excluded from indexing.
                 for (dir in listOf(".dart_tool", ".pub", "build")) {
-                    val url = "$entryUrl/$dir"
+                    val url = "${jasprVf.url}/$dir"
                     if (url !in existingExcludes) {
                         contentEntry.addExcludeFolder(url)
                     }
                 }
-
-                // Mark "web/images" as a resource root when it exists,
-                // so the IDE handles static assets correctly.
-                val imagesDir = File(projectDir, "web/images")
-                val imagesVf = LocalFileSystem.getInstance()
-                    .refreshAndFindFileByIoFile(imagesDir)
 
                 if (imagesVf != null) {
                     val alreadyMarked = contentEntry.sourceFolders
@@ -101,7 +117,10 @@ object JasprModuleConfigurator {
                     }
                 }
             }
-            model.commit()
+
+            // Committing an unchanged model would still fire rootsChanged and could trigger
+            // reindexing on every project open; only commit real changes.
+            if (model.isChanged) model.commit() else model.dispose()
         } catch (e: Exception) {
             model.dispose()
             throw e

@@ -1,7 +1,11 @@
 package com.github.eladrimonos.jasprintellij.actions
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
+import com.github.eladrimonos.jasprintellij.startup.JasprDartSdkResolver
+import com.intellij.openapi.progress.ProgressManager
 import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
@@ -26,9 +30,8 @@ class CreateMelosScriptAction : AnAction() {
         val workspaceInfo = MelosWorkspaceDetector.detect(File(basePath))
         if (workspaceInfo == null) {
             notify(
-                project, "Not a Melos workspace",
-                "This project is not part of a Dart/Melos workspace (no 'workspace:' or 'melos:' " +
-                    "section was found in pubspec.yaml, and no melos.yaml exists).",
+                project, JasprBundle.message("jaspr.notification.melos.not.workspace.title"),
+                JasprBundle.message("jaspr.notification.melos.not.workspace.content"),
                 NotificationType.ERROR,
             )
             return
@@ -38,16 +41,25 @@ class CreateMelosScriptAction : AnAction() {
         val dialog = CreateMelosScriptDialog(project, knownPackageNames)
         if (!dialog.showAndGet()) return
 
-        when (val result = MelosScriptInjector.ensureScript(workspaceInfo.melosConfigFile, dialog.scriptName, dialog.packageName)) {
+        val melosVersion = JasprDartSdkResolver.getConfiguredDartSdkHomePath(project)?.let { sdkPath ->
+            ProgressManager.getInstance().runProcessWithProgressSynchronously<String?, RuntimeException>(
+                { JasprTooling().readMelosVersion(sdkPath) }, JasprBundle.message("jaspr.progress.checking.melos"), false, project,
+            )
+        }
+        val relativeDir = if (JasprTooling().isVersionAtLeast(melosVersion, MelosScriptInjector.INHERITED_STDIO_MELOS_VERSION)) {
+            MelosWorkspaceDetector.resolveMemberPackageRelativeDir(workspaceInfo, dialog.packageName)
+        } else null
+
+        when (val result = MelosScriptInjector.ensureScript(
+            workspaceInfo.melosConfigFile, dialog.scriptName, dialog.packageName, relativeDir,
+        )) {
             is MelosScriptInjector.InjectionResult.ConflictExistingMelosSection ->
-                notify(project, "Melos script conflict", result.message, NotificationType.WARNING)
+                notify(project, JasprBundle.message("jaspr.notification.melos.conflict.title"), result.message, NotificationType.WARNING)
 
             is MelosScriptInjector.InjectionResult.Written ->
                 notify(
-                    project, "Melos script created",
-                    "Script \"${dialog.scriptName}\" now runs jaspr daemon for package \"${dialog.packageName}\" " +
-                        "in ${workspaceInfo.melosConfigFile.name}. Select it as \"Melos script\" in a Jaspr " +
-                        "Run Configuration to use it.",
+                    project, JasprBundle.message("jaspr.notification.melos.created.title"),
+                    JasprBundle.message("jaspr.notification.melos.created.content", dialog.scriptName, dialog.packageName, workspaceInfo.melosConfigFile.name),
                     NotificationType.INFORMATION,
                 )
         }

@@ -115,4 +115,61 @@ class MelosWorkspaceDetectorTest {
 
         assertNull(MelosWorkspaceDetector.detect(dir))
     }
+
+    @Test
+    fun `resolves a member package dir by name relative to the config file`() {
+        File(root, "pubspec.yaml").writeText("name: ws\nworkspace:\n  - apps/site\n  - packages/ui\n")
+        File(root, "apps/site").mkdirs()
+        File(root, "apps/site/pubspec.yaml").writeText("name: website\n")
+        File(root, "packages/ui").mkdirs()
+        File(root, "packages/ui/pubspec.yaml").writeText("name: ui_kit\n")
+
+        val info = MelosWorkspaceDetector.detect(root)!!
+
+        assertEquals("apps/site", MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "website"))
+        assertEquals("packages/ui", MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "ui_kit"))
+        assertNull(MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "missing"))
+    }
+
+    private fun pkg(path: String) {
+        File(root, path).mkdirs()
+        File(root, "$path/pubspec.yaml").writeText("name: ${path.substringAfterLast('/')}\n")
+    }
+
+    @Test
+    fun `expands glob entries of the pub workspace field`() {
+        pkg("apps/web")
+        pkg("apps/admin")
+        pkg("packages/ui")
+        pkg("packages/nested/forms")
+        File(root, "packages/not_a_package").mkdirs()
+        File(root, "pubspec.yaml").writeText("name: ws\nworkspace:\n  - apps/*\n  - packages/**\n  - tools/cli\n")
+
+        val info = MelosWorkspaceDetector.detect(root)!!
+
+        assertEquals(
+            listOf("apps/admin", "apps/web", "packages/nested/forms", "packages/ui", "tools/cli"),
+            info.memberPackagePaths,
+        )
+    }
+
+    @Test
+    fun `reads members from melos 6 packages globs without a pub workspace`() {
+        pkg("apps/web")
+        pkg("packages/ui")
+        File(root, "melos.yaml").writeText("name: ws\npackages:\n  - apps/*\n")
+
+        val info = MelosWorkspaceDetector.detect(root)!!
+
+        assertEquals(listOf("apps/web"), info.memberPackagePaths)
+    }
+
+    @Test
+    fun `glob expansion skips build output and hidden directories`() {
+        pkg("apps/web")
+        pkg("apps/web/build/generated")
+        pkg("apps/.hidden")
+
+        assertEquals(listOf("apps/web"), MelosWorkspaceDetector.expandMemberPatterns(root, listOf("apps/**")))
+    }
 }

@@ -32,10 +32,19 @@
             <option name="JASPR_STATEMENT" value="true"/>
         </context>
     </template>
-    <template name="jstyls" value="@css&#10;List&lt;StyleRule&gt; get styles =&gt; [&#10;  css('', [&#10;    css('&amp;').styles(&#10;      $CONTENT$,&#10;    ),&#10;  ]),&#10;];" description="Create a new styles definition" toReformat="false" toShortenFQNames="true">
+    <!-- jaspr_builder rejects @css on non-static class members, hence two variants. -->
+    <template name="jstyls" value="@css&#10;static List&lt;StyleRule&gt; get styles =&gt; [&#10;  css('$SELECTOR$').styles(&#10;    $CONTENT$,&#10;  ),&#10;];" description="Create a component styles definition (@css static getter)" toReformat="false" toShortenFQNames="true">
+        <variable name="SELECTOR" expression="" defaultValue="" alwaysStopAt="true" />
         <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
         <context>
-            <option name="JASPR_ANYWHERE" value="true"/>
+            <option name="JASPR_CLASS_MEMBER" value="true"/>
+        </context>
+    </template>
+    <template name="jstylsg" value="@css&#10;final styles = [&#10;  css('$SELECTOR$').styles(&#10;    $CONTENT$,&#10;  ),&#10;];" description="Create a global styles definition (@css top-level variable)" toReformat="false" toShortenFQNames="true">
+        <variable name="SELECTOR" expression="" defaultValue="" alwaysStopAt="true" />
+        <variable name="CONTENT" expression="" defaultValue="" alwaysStopAt="true" />
+        <context>
+            <option name="JASPR_TOPLEVEL" value="true"/>
         </context>
     </template>
     <template name="jevt" value="events: {'$NAME$': (event) {&#10;  $CONTENT$&#10;}},"

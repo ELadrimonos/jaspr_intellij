@@ -68,6 +68,58 @@ class JasprConsoleFormatterTest : BasePlatformTestCase() {
         assertEquals("Colored text", result[0].text)
     }
 
+    // ── jaspr_cli >= 0.24 badge tags (captured from a real 0.24.0-beta.0 daemon) ──
+
+    fun testFormatDaemonLog_024BuilderBadge() {
+        val params = mapOf("message" to
+            "\\033[45m\\033[97m\\033[1m BUILDER \\033[22m\\033[0m\\033[0m Starting web compilers...")
+        val result = JasprConsoleFormatter.format("daemon.log", params)
+
+        assertEquals("[BUILDER] Starting web compilers...", result.single().text)
+        assertEquals(ConsoleViewContentType.LOG_DEBUG_OUTPUT, result.single().type)
+    }
+
+    fun testFormatDaemonLog_024LogBadgeMapsToCli() {
+        val params = mapOf("message" to "\\033[100m\\033[97m\\033[1m LOG     \\033[22m\\033[0m\\033[0m Running...")
+        val result = JasprConsoleFormatter.format("daemon.log", params)
+
+        assertEquals("[CLI] Running...", result.single().text)
+        assertEquals(ConsoleViewContentType.SYSTEM_OUTPUT, result.single().type)
+    }
+
+    fun testFormatDaemonLog_024ServerError() {
+        val params = mapOf("message" to
+            "\\033[43m\\033[30m\\033[1m SERVER  \\033[22m\\033[0m\\033[0m \\033[91m\\033[1m[ERROR] \\033[22m\\033[0m" +
+            "\\033[91m\\033[1mCould not start the VM service\\033[22m\\033[0m")
+        val result = JasprConsoleFormatter.format("daemon.log", params)
+
+        assertEquals("[SERVER] [ERROR] Could not start the VM service", result.single().text)
+        assertEquals(ConsoleViewContentType.LOG_ERROR_OUTPUT, result.single().type)
+    }
+
+    fun testFormatDaemonLog_UntaggedWarning() {
+        val result = JasprConsoleFormatter.format("daemon.log", mapOf("message" to "[WARNING] Port in use"))
+        assertEquals(ConsoleViewContentType.LOG_WARNING_OUTPUT, result.single().type)
+    }
+
+    fun testFormatDaemonLog_PlainMessageStartingWithTagWordIsUntouched() {
+        val result = JasprConsoleFormatter.format("daemon.log", mapOf("message" to "Server started"))
+        assertEquals("Server started", result.single().text)
+    }
+
+    fun testFormatAppProgressAndLog() {
+        val progress = JasprConsoleFormatter.format(
+            "app.progress", mapOf("appId" to "a", "message" to "Performing hot reload...")
+        )
+        assertEquals("⟳ Performing hot reload...", progress.single().text)
+
+        val finished = JasprConsoleFormatter.format("app.progress", mapOf("appId" to "a", "finished" to true))
+        assertEquals(0, finished.size)
+
+        val log = JasprConsoleFormatter.format("app.log", mapOf("appId" to "a", "log" to "Reloaded application in 42ms"))
+        assertEquals("✔ Reloaded application in 42ms", log.single().text)
+    }
+
     fun testEmptyOutput() {
         val result = JasprConsoleFormatter.format("unknown.event", emptyMap())
         assertEquals(0, result.size)

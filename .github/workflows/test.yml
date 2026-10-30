@@ -60,13 +60,8 @@ jobs:
           $dartSdk = Split-Path $dartPath -Parent | Split-Path -Parent
           echo "DART_HOME=$dartSdk" >> $env:GITHUB_ENV
 
-      # Install Jaspr CLI globally
-      - name: Install Jaspr CLI
-        run: dart pub global activate jaspr_cli
-
-      # Install Melos globally (needed by the Melos workspace integration tests)
-      - name: Install Melos
-        run: dart pub global activate melos
+      # jaspr_cli and melos are installed by the tests themselves into an isolated
+      # PUB_CACHE (build/test-pub-cache, see build.gradle.kts), pinned per test.
 
       # Set up the Java environment for the next steps
       - name: Setup Java

@@ -74,7 +74,8 @@ intellijPlatform {
 
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
-            untilBuild = providers.gradleProperty("pluginUntilBuild")
+            // Open-ended: compatible with every future IDE release.
+            untilBuild = provider { null }
         }
     }
 
@@ -128,6 +129,12 @@ tasks {
 
     jar {
         exclude("**/screenshots/**")
+    }
+
+    test {
+        // Integration tests run `dart pub global activate`; keep them off the
+        // developer's own global jaspr_cli / melos with a dedicated pub cache.
+        environment("PUB_CACHE", layout.buildDirectory.dir("test-pub-cache").get().asFile.absolutePath)
     }
 }
 

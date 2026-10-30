@@ -14,6 +14,10 @@ object JasprConsoleFormatter {
     private val ansiRegex = Regex("""\033\[[0-9;]*m""")
     // Literal \033 as text (daemon escapes them in JSON strings)
     private val escapedAnsiRegex = Regex("""\\033\[[0-9;]*m""")
+    // jaspr_cli >= 0.24 renders tags as a padded badge (" BUILDER ", " SERVER  ")
+    // instead of "[BUILDER] "; once ANSI is stripped only the bare word remains.
+    private val legacyTagRegex = Regex("""^\[(CLI|BUILDER|SERVER|FLUTTER|CLIENT|STYLES)] """)
+    private val badgeTagRegex = Regex("""^\s*(LOG|BUILDER|SERVER|FLUTTER|CLIENT|STYLES)\s+""")
 
     fun format(eventName: String, params: Map<String, Any>): List<ConsoleLine> =
         when (eventName) {
@@ -25,6 +29,13 @@ object JasprConsoleFormatter {
             "client.debugPort" -> formatLifecycle(
                 "⚙ Client debug port: ${params["port"]}  ws=${params["wsUri"]}"
             )
+            "app.progress"   -> (params["message"] as? String)
+                ?.takeIf { params["finished"] != true }
+                ?.let { formatLifecycle("⟳ ${it.trimEnd()}") }
+                ?: emptyList()
+            "app.log"        -> (params["log"] as? String)
+                ?.let { formatLifecycle("✔ ${it.trimEnd()}") }
+                ?: emptyList()
             "client.log"     -> {
                 val msg = (params["log"] as? String)?.trimEnd() ?: return emptyList()
                 listOf(ConsoleLine("  $msg", ConsoleViewContentType.NORMAL_OUTPUT))
@@ -36,10 +47,17 @@ object JasprConsoleFormatter {
 
     private fun formatDaemonLog(params: Map<String, Any>): List<ConsoleLine> {
         val raw = (params["message"] as? String) ?: return emptyList()
-        val clean = stripAnsi(raw).trimEnd()
+        val clean = normalizeTag(stripAnsi(raw).trimEnd())
         if (clean.isBlank()) return emptyList()
+        val body = clean.replaceFirst(legacyTagRegex, "")
 
         return when {
+            body.startsWith("[ERROR]") || body.startsWith("[CRITICAL]") -> listOf(
+                ConsoleLine(clean, ConsoleViewContentType.LOG_ERROR_OUTPUT)
+            )
+            body.startsWith("[WARNING]") -> listOf(
+                ConsoleLine(clean, ConsoleViewContentType.LOG_WARNING_OUTPUT)
+            )
             clean.startsWith("[CLI]") -> listOf(
                 ConsoleLine(clean, ConsoleViewContentType.SYSTEM_OUTPUT)
             )
@@ -72,6 +90,13 @@ object JasprConsoleFormatter {
 
     private fun formatLifecycle(message: String) =
         listOf(ConsoleLine(message, ConsoleViewContentType.SYSTEM_OUTPUT))
+
+    /** Rewrites a 0.24-style badge tag (" BUILDER  msg") to the legacy "[BUILDER] msg" form. */
+    private fun normalizeTag(text: String): String {
+        val match = badgeTagRegex.find(text) ?: return text
+        val name = match.groupValues[1].let { if (it == "LOG") "CLI" else it }
+        return "[$name] " + text.substring(match.range.last + 1)
+    }
 
     private fun stripAnsi(text: String): String =
         text.replace(escapedAnsiRegex, "").replace(ansiRegex, "")
