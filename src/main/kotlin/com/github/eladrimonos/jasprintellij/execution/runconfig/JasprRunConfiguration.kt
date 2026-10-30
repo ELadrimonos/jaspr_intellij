@@ -38,6 +38,7 @@ class JasprRunConfiguration(
     override fun writeExternal(element: Element) {
         super.writeExternal(element)
 
+        JDOMExternalizerUtil.writeField(element, "packageDir", packageDir)
         JDOMExternalizerUtil.writeField(element, "input", input)
         JDOMExternalizerUtil.writeField(element, "mode", mode)
         JDOMExternalizerUtil.writeField(element, "port", port)
@@ -63,6 +64,7 @@ class JasprRunConfiguration(
     override fun readExternal(element: Element) {
         super.readExternal(element)
 
+        packageDir = JDOMExternalizerUtil.readField(element, "packageDir") ?: ""
         input = JDOMExternalizerUtil.readField(element, "input") ?: ""
         mode = JDOMExternalizerUtil.readField(element, "mode") ?: "refresh"
         port = JDOMExternalizerUtil.readField(element, "port") ?: "8080"
@@ -91,6 +93,10 @@ class JasprRunConfiguration(
         JasprRunProfileState(environment, options)
 
     // region Convenience accessors (delegate to options)
+
+    var packageDir: String
+        get() = options.packageDir
+        set(v) { options.packageDir = v }
 
     var input: String
         get() = options.input

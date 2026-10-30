@@ -355,9 +355,15 @@ class JasprRunProfileState(
         val dartExeName = if (SystemInfo.isWindows) "dart.exe" else "dart"
         val dartExe = File(sdkPath, "bin/$dartExeName").absolutePath
 
+        // Melos runs the script from its target package; the direct path needs the package as cwd.
+        val packageDir = if (options.melosScript.isBlank()) JasprPackageDir.resolve(project, options) else null
+        if (packageDir != null && !packageDir.isDirectory) {
+            error("Jaspr package directory not found: ${packageDir.path}. Pick another package in the run configuration.")
+        }
+
         val cmd = GeneralCommandLine()
             .withExePath(dartExe)
-            .withWorkDirectory(project.basePath)
+            .withWorkDirectory(packageDir?.path ?: project.basePath)
             .withCharset(StandardCharsets.UTF_8)
             .withEnvironment(EnvironmentUtil.getEnvironmentMap())
 
@@ -373,23 +379,24 @@ class JasprRunProfileState(
         }
 
         cmd.addParameters("pub", "global", "run", "jaspr_cli:jaspr", "daemon")
-        addJasprFlags(cmd)
+        addJasprFlags(cmd, packageDir)
 
         return cmd
     }
 
     /** Appends the `jaspr daemon` flags derived from [options] — shared by the direct and Melos paths. */
-    private fun addJasprFlags(cmd: GeneralCommandLine) {
-        // `melos run` executes the underlying command with the target PACKAGE
-        // directory as cwd, not the workspace root — unlike the direct-invocation
-        // path, where cwd is always `project.basePath`. Any file-path flag stored
-        // relative to the workspace root (e.g. "apps/website/lib/main.server.dart")
-        // must be re-based relative to that package directory (e.g. "lib/main.server.dart")
-        // or jaspr_cli fails with "Specified entry point ... does not exist."
-        val rebasePath: (String) -> String = if (options.melosScript.isNotBlank()) {
-            { resolvePathForMelosCwd(it) }
-        } else {
-            { it }
+    private fun addJasprFlags(cmd: GeneralCommandLine, packageDir: File? = null) {
+        // Both paths run the daemon from the PACKAGE directory, not the project root:
+        // `melos run` uses the script's target package, the direct path [packageDir].
+        // Any file-path flag stored relative to the project root (e.g.
+        // "apps/website/lib/main.server.dart") must be re-based relative to that package
+        // directory (e.g. "lib/main.server.dart") or jaspr_cli fails with "Specified entry
+        // point ... does not exist."
+        val basePath = project.basePath
+        val rebasePath: (String) -> String = when {
+            options.melosScript.isNotBlank() -> { path -> resolvePathForMelosCwd(path) }
+            packageDir != null && basePath != null -> { path -> JasprPackageDir.rebase(File(basePath), packageDir, path) }
+            else -> { path -> path }
         }
 
         cmd.addParameters(JasprDaemonFlags.build(options, cliVersion, rebasePath))

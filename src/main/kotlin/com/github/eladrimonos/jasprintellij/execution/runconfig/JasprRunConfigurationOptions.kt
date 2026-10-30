@@ -10,6 +10,15 @@ import com.intellij.execution.configurations.RunConfigurationOptions
  */
 class JasprRunConfigurationOptions : RunConfigurationOptions() {
 
+    /**
+     * Directory of the Jaspr package to serve, relative to the project root; empty means the
+     * project's first Jaspr package. Used as the daemon's cwd when no [melosScript] is set.
+     */
+    var packageDir: String
+        get() = _packageDir ?: ""
+        set(v) { _packageDir = v.ifEmpty { null } }
+    private var _packageDir by string("")
+
     /** The main entry point file for the Jaspr application. Corresponds to `--input`. */
     var input: String
         get() = _input ?: ""

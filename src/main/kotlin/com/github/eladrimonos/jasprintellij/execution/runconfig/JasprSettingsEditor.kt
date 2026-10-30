@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
 import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.intellij.execution.ui.RunConfigurationFragmentedEditor
@@ -9,6 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.LabeledComponent
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.fields.ExpandableTextField
 import java.awt.BorderLayout
@@ -22,6 +24,38 @@ class JasprSettingsEditor(
 
     override fun createRunFragments(): List<SettingsEditorFragment<JasprRunConfiguration, *>> {
         val fragments = mutableListOf<SettingsEditorFragment<JasprRunConfiguration, *>>()
+
+        // -----------------------------------------------------------------------
+        // 0. Jaspr package — which app of a workspace to serve. Shown by default only
+        //    when the project has several Jaspr packages; ignored with a Melos script,
+        //    whose target package is set in the script itself.
+        // -----------------------------------------------------------------------
+        val projectDir = project.basePath?.let(::File)
+        val packageDirs: List<String> = projectDir?.let { dir ->
+            JasprTooling.findJasprProjectDirs(project).map { JasprPackageDir.toStored(dir, it) }
+        }.orEmpty()
+        val packageCombo = ComboBox(arrayOf("") + packageDirs).apply {
+            renderer = SimpleListCellRenderer.create("") { value ->
+                if (value.isNullOrEmpty()) "Auto (${packageDirs.firstOrNull()?.ifEmpty { "project root" } ?: "project root"})"
+                else value
+            }
+            toolTipText = "Package the daemon runs in. Ignored when a Melos script is set."
+        }
+        val labeledPackage = LabeledComponent.create(packageCombo, "Jaspr package:", BorderLayout.WEST)
+        fragments.add(SettingsEditorFragment(
+            "jaspr.packageDir", "Jaspr package", null, labeledPackage,
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                // Keep a stored package that is no longer detected selectable instead of dropping it.
+                if (config.packageDir.isNotBlank() && (0 until c.component.itemCount).none { c.component.getItemAt(it) == config.packageDir }) {
+                    c.component.addItem(config.packageDir)
+                }
+                c.component.selectedItem = config.packageDir
+            },
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                config.packageDir = c.component.selectedItem as? String ?: ""
+            },
+            Predicate { packageDirs.size > 1 || it.packageDir.isNotBlank() }
+        ))
 
         // -----------------------------------------------------------------------
         // 1. Entry File (always visible)

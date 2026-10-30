@@ -69,7 +69,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                                 if (roots.isNotEmpty()) {
                                     results.add(
                                         range to ClickableTextCodeVisionEntry(
-                                            text = JasprBundle.message("jaspr.component.scopes.server.label"),
+                                            text = scopeLabel(JasprBundle.message("jaspr.component.scopes.server.label"), roots),
                                             providerId = id,
                                             icon = JasprIcons.Server,
                                             onClick = { event: MouseEvent?, ed: Editor ->
@@ -85,7 +85,7 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
                                 if (roots.isNotEmpty()) {
                                     results.add(
                                         range to ClickableTextCodeVisionEntry(
-                                            text = JasprBundle.message("jaspr.component.scopes.client.label"),
+                                            text = scopeLabel(JasprBundle.message("jaspr.component.scopes.client.label"), roots),
                                             providerId = id,
                                             icon = JasprIcons.Client,
                                             onClick = { event: MouseEvent?, ed: Editor ->
@@ -119,6 +119,12 @@ abstract class BaseJasprScopeProvider : DaemonBoundCodeVisionProvider {
     companion object {
         private const val HINT_URL =
             "https://docs.jaspr.site/dev/server#component-scopes"
+
+        /** "Client Scope · web, admin" for a file shared by several apps, else just [label]. */
+        internal fun scopeLabel(label: String, roots: List<JasprToolingDaemonService.ScopeTarget>): String {
+            val apps = roots.mapNotNull { it.app }.distinct()
+            return if (apps.isEmpty()) label else "$label · ${apps.joinToString(", ")}"
+        }
     }
 }
 
@@ -143,7 +149,7 @@ class JasprScopeNavigationHandler {
                 roots,
             ) {
                 override fun getTextFor(value: JasprToolingDaemonService.ScopeTarget): String =
-                    "${File(value.path).name}:${value.line}"
+                    listOfNotNull(value.app, "${File(value.path).name}:${value.line}").joinToString(" → ")
 
                 override fun onChosen(
                     selectedValue: JasprToolingDaemonService.ScopeTarget,

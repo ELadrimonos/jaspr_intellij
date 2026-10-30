@@ -37,10 +37,25 @@ class JasprTooling(
 
             // Root pubspec.yaml (or melos.yaml) may be a bare workspace manifest with no
             // jaspr dependency of its own — check member packages before giving up.
-            val workspaceInfo = MelosWorkspaceDetector.detect(projectDir) ?: return null
-            return workspaceInfo.memberPackagePaths
-                .map { relativePath -> File(workspaceInfo.workspaceRoot, relativePath) }
-                .firstOrNull { memberDir -> pubspecMentionsJaspr(File(memberDir, "pubspec.yaml")) }
+            return findJasprProjectDirs(project).firstOrNull()
+        }
+
+        /**
+         * Every Jaspr package of the project: the opened root if it depends on jaspr, plus
+         * each workspace/Melos member that does. Each app writes its own `scopes.json`.
+         */
+        fun findJasprProjectDirs(project: Project): List<File> =
+            project.basePath?.let { findJasprProjectDirs(File(it)) }.orEmpty()
+
+        internal fun findJasprProjectDirs(projectDir: File): List<File> {
+            val dirs = LinkedHashSet<File>()
+            if (pubspecMentionsJaspr(File(projectDir, "pubspec.yaml"))) dirs += projectDir.absoluteFile
+            MelosWorkspaceDetector.detect(projectDir)?.let { info ->
+                info.memberPackagePaths
+                    .map { relativePath -> File(info.workspaceRoot, relativePath).absoluteFile }
+                    .filterTo(dirs) { memberDir -> pubspecMentionsJaspr(File(memberDir, "pubspec.yaml")) }
+            }
+            return dirs.toList()
         }
 
         // Matches an actual `jaspr:` dependency declaration line (e.g. "  jaspr: ^0.23.4"),
