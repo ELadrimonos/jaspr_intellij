@@ -117,8 +117,6 @@ mismatch notifications and formatted console output. Supports Jaspr 0.22 to 0.24
 
         <highlightingPassFactory
                 implementation="com.github.eladrimonos.jasprintellij.editor.guides.JasprUiGuidesPassFactory"/>
-        <daemon.indentsPassFilter
-                implementation="com.github.eladrimonos.jasprintellij.editor.guides.JasprIndentsPassFilter"/>
 
         <applicationConfigurable
                 parentId="language"

@@ -1,10 +1,8 @@
 package com.github.eladrimonos.jasprintellij.editor
 
-import com.github.eladrimonos.jasprintellij.editor.guides.JasprIndentsPassFilter
 import com.github.eladrimonos.jasprintellij.editor.guides.JasprUiGuide
 import com.github.eladrimonos.jasprintellij.editor.guides.JasprUiGuides
 import com.github.eladrimonos.jasprintellij.settings.JasprSettings
-import com.intellij.openapi.editor.IndentGuideDescriptor
 import com.intellij.psi.PsiFile
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 
@@ -130,13 +128,5 @@ class JasprUiGuidesTest : BasePlatformTestCase() {
         } finally {
             settings.showUiGuides = true
         }
-    }
-
-    fun testIndentGuidesInTheGuideColumnAreHidden() {
-        val filter = JasprIndentsPassFilter()
-        val guide = JasprUiGuide(startOffset = 0, endOffset = 0, line = 3, indent = 4, childOffsets = listOf(0), lastChildLine = 8)
-        assertTrue(filter.overlaps(guide, IndentGuideDescriptor(4, 3, 10)))
-        assertFalse(filter.overlaps(guide, IndentGuideDescriptor(6, 4, 8)))
-        assertFalse(filter.overlaps(guide, IndentGuideDescriptor(4, 9, 12)))
     }
 }

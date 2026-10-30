@@ -5,7 +5,7 @@
 ## [1.3.0] - 2026-10-30
 ### Added
 - Compatibility with Jaspr 0.24 (tested against `0.24.0-beta.0`).
-- UI guides for component trees ([schultek/jaspr#914](https://github.com/schultek/jaspr/issues/914)): lines in the editor connect each component to its children (`div([...])`, `children:`, `child:` and `body:` arguments, including `if`/`for`/spread elements), in `build` methods and functions returning a `Component`. Platform indent guides in the same column are hidden so they don't overlap. Toggle in **Settings | Languages & Frameworks | Jaspr**.
+- UI guides for component trees ([schultek/jaspr#914](https://github.com/schultek/jaspr/issues/914)): lines in the editor connect each component to its children (`div([...])`, `children:`, `child:` and `body:` arguments, including `if`/`for`/spread elements), in `build` methods and functions returning a `Component`. Toggle in **Settings | Languages & Frameworks | Jaspr**.
 - **Jaspr Hot Reload** / **Jaspr Hot Restart** actions in the Run/Debug tool window toolbar, which send `client.restart` to the running daemon. Hot Reload is only offered with jaspr_cli ≥ 0.24 (older CLIs only support restarts), and a failed reload/restart is reported in the console.
 - "Auto action (on save)" run option (`refresh`, `reload`, `restart`, `none`), mapped to `--auto` on jaspr_cli ≥ 0.24 and to `--mode` on older versions.
 - "Install Jaspr AI skills" checkbox in the New Project wizard (off by default; passes `--[no-]skills` on jaspr_cli ≥ 0.24).
