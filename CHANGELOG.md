@@ -1,6 +1,8 @@
 # Changelog
 
 ## [Unreleased]
+
+## [1.3.0] - 2026-10-30
 ### Added
 - Compatibility with Jaspr 0.24 (tested against `0.24.0-beta.0`).
 - **Jaspr Hot Reload** / **Jaspr Hot Restart** actions in the Run/Debug tool window toolbar, which send `client.restart` to the running daemon. Hot Reload is only offered with jaspr_cli ≥ 0.24 (older CLIs only support restarts), and a failed reload/restart is reported in the console.
