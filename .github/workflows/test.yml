@@ -40,7 +40,10 @@ jobs:
       - name: Setup Dart SDK
         uses: dart-lang/setup-dart@v1
         with:
-          sdk: stable
+          # Pinned below 3.14: jaspr_builder < 0.24 needs analyzer ^12, while
+          # build_web_compilers >= 4.8.11 (the only one allowing SDK 3.14) needs
+          # analyzer >= 13.3, so `pub get` can't resolve for jaspr 0.22/0.23.
+          sdk: 3.13.7
 
       # Set DART_HOME for Linux/macOS
       - name: Set DART_HOME
