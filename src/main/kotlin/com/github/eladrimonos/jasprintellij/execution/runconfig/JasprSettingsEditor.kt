@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.execution.runconfig
 
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.services.MelosScriptInjector
 import com.github.eladrimonos.jasprintellij.services.MelosWorkspaceDetector
 import com.intellij.execution.ui.RunConfigurationFragmentedEditor
@@ -9,11 +10,13 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.LabeledComponent
 import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.components.fields.ExpandableTextField
 import java.awt.BorderLayout
 import java.io.File
 import java.util.function.Predicate
+import javax.swing.JList
 
 class JasprSettingsEditor(
     runConfiguration: JasprRunConfiguration,
@@ -22,6 +25,40 @@ class JasprSettingsEditor(
 
     override fun createRunFragments(): List<SettingsEditorFragment<JasprRunConfiguration, *>> {
         val fragments = mutableListOf<SettingsEditorFragment<JasprRunConfiguration, *>>()
+
+        // -----------------------------------------------------------------------
+        // 0. Jaspr package — which app of a workspace to serve. Shown by default only
+        //    when the project has several Jaspr packages; ignored with a Melos script,
+        //    whose target package is set in the script itself.
+        // -----------------------------------------------------------------------
+        val projectDir = project.basePath?.let(::File)
+        val packageDirs: List<String> = projectDir?.let { dir ->
+            JasprTooling.findJasprProjectDirs(project).map { JasprPackageDir.toStored(dir, it) }
+        }.orEmpty()
+        val packageCombo = ComboBox(arrayOf("") + packageDirs).apply {
+            renderer = object : SimpleListCellRenderer<String>() {
+                override fun customize(list: JList<out String>, value: String?, index: Int, selected: Boolean, hasFocus: Boolean) {
+                    text = if (value.isNullOrEmpty()) "Auto (${packageDirs.firstOrNull()?.ifEmpty { "project root" } ?: "project root"})"
+                    else value
+                }
+            }
+            toolTipText = "Package the daemon runs in. Ignored when a Melos script is set."
+        }
+        val labeledPackage = LabeledComponent.create(packageCombo, "Jaspr package:", BorderLayout.WEST)
+        fragments.add(SettingsEditorFragment(
+            "jaspr.packageDir", "Jaspr package", null, labeledPackage,
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                // Keep a stored package that is no longer detected selectable instead of dropping it.
+                if (config.packageDir.isNotBlank() && (0 until c.component.itemCount).none { c.component.getItemAt(it) == config.packageDir }) {
+                    c.component.addItem(config.packageDir)
+                }
+                c.component.selectedItem = config.packageDir
+            },
+            { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> ->
+                config.packageDir = c.component.selectedItem as? String ?: ""
+            },
+            Predicate { packageDirs.size > 1 || it.packageDir.isNotBlank() }
+        ))
 
         // -----------------------------------------------------------------------
         // 1. Entry File (always visible)
@@ -58,12 +95,15 @@ class JasprSettingsEditor(
         ).apply { isRemovable = false })
 
         // -----------------------------------------------------------------------
-        // 2. Reload Mode (always visible)
+        // 2. Auto action after each rebuild (always visible)
+        //    jaspr_cli >= 0.24 → `--auto`; older CLIs → `--mode` (reload/refresh only)
         // -----------------------------------------------------------------------
-        val modeCombo = ComboBox(arrayOf("refresh", "reload"))
-        val labeledMode = LabeledComponent.create(modeCombo, "Reload mode:", BorderLayout.WEST)
+        val modeCombo = ComboBox(arrayOf("refresh", "reload", "restart", "none"))
+        modeCombo.toolTipText = "Action performed after each rebuild on save. " +
+            "\"restart\" and \"none\" require jaspr_cli 0.24.0 or newer."
+        val labeledMode = LabeledComponent.create(modeCombo, "Auto action (on save):", BorderLayout.WEST)
         fragments.add(SettingsEditorFragment(
-            "jaspr.mode", "Reload mode", null, labeledMode,
+            "jaspr.mode", "Auto action", null, labeledMode,
             { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> -> c.component.selectedItem = config.mode.ifBlank { "refresh" } },
             { config: JasprRunConfiguration, c: LabeledComponent<ComboBox<String>> -> config.mode = c.component.selectedItem as? String ?: "refresh" },
             Predicate { true }
@@ -111,8 +151,8 @@ class JasprSettingsEditor(
 
         // Ports — only the main port is visible by default
         fragments.add(createTextFragment("jaspr.port", "Port", "Server", "Port:", "8080", { it.port }, { c, v -> c.port = v }, true))
-        fragments.add(createTextFragment("jaspr.webPort", "Web port", "Server", "Web port:", "5467", { it.webPort }, { c, v -> c.webPort = v }))
-        fragments.add(createTextFragment("jaspr.proxyPort", "Proxy port", "Server", "Proxy port:", "5567", { it.proxyPort }, { c, v -> c.proxyPort = v }))
+        fragments.add(createTextFragment("jaspr.webPort", "Web port (jaspr < 0.24)", "Server", "Web port:", "5467", { it.webPort }, { c, v -> c.webPort = v }))
+        fragments.add(createTextFragment("jaspr.proxyPort", "Proxy port (jaspr < 0.24)", "Server", "Proxy port:", "5567", { it.proxyPort }, { c, v -> c.proxyPort = v }))
 
         // Build Mode
         val buildModeCombo = ComboBox(arrayOf("dev (default)", "debug", "release"))
@@ -142,6 +182,10 @@ class JasprSettingsEditor(
             "jaspr.skipServer", "Skip server", "Server",
             Predicate { it.skipServer }
         ) { config: JasprRunConfiguration, value: Boolean -> config.skipServer = value })
+        fragments.add(SettingsEditorFragment.createTag(
+            "jaspr.openDevTools", "Open DevTools on debug", "Debug",
+            Predicate { it.openDevTools }
+        ) { config: JasprRunConfiguration, value: Boolean -> config.openDevTools = value })
         fragments.add(SettingsEditorFragment.createTag(
             "jaspr.managed", "Managed build options", "Build",
             Predicate { it.managedBuildOptions }

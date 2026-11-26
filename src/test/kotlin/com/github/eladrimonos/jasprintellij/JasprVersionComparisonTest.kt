@@ -2,6 +2,7 @@ package com.github.eladrimonos.jasprintellij
 
 import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationOptions
 import com.github.eladrimonos.jasprintellij.services.JasprProjectCreator
+import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import org.junit.Test
 import java.io.File
@@ -10,12 +11,19 @@ import java.util.concurrent.TimeUnit
 
 class JasprVersionComparisonTest : JasprIntegrationTestCase() {
 
+    // Each test installs the version it exercises.
+    override val requiredCliVersion: String? = null
+
     fun testVersion0224() {
         runTestsForVersion("0.22.4")
     }
 
     fun testVersion0230() {
         runTestsForVersion("0.23.4")
+    }
+
+    fun testVersion0240Beta() {
+        runTestsForVersion("0.24.0-beta.0")
     }
 
     private fun runTestsForVersion(version: String) {
@@ -26,7 +34,7 @@ class JasprVersionComparisonTest : JasprIntegrationTestCase() {
         installJasprCli(version)
 
         // 1. Test Project Creation
-        val projectName = "test_project_${version.replace(".", "_").replace("+", "_")}"
+        val projectName = "test_project_${version.replace(Regex("[.+-]"), "_")}"
         val projectDir = createTestProjectDir(projectName)
         
         createProject(projectDir, JasprProjectCreator.Options(
@@ -38,31 +46,7 @@ class JasprVersionComparisonTest : JasprIntegrationTestCase() {
 
         // Patch pubspec for dependency conflicts before pub get
         val pubspecFile = File(projectDir, "pubspec.yaml")
-        val originalContent = pubspecFile.readText()
-        var patchedContent = originalContent
-
-        // Fix for 0.22.4 dependency conflict with jaspr_router
-        // CLI templates may emit ^0.8.2 or ^0.9.x — both require jaspr ^0.23.
-        if (version == "0.22.4") {
-            if (patchedContent.contains("jaspr_router: ^0.8.2")) {
-                println("Patching jaspr_router ^0.8.2 for 0.22.4...")
-                patchedContent = patchedContent.replace("jaspr_router: ^0.8.2", "jaspr_router: 0.8.1")
-            } else if (patchedContent.contains("jaspr_router: ^0.9.0")) {
-                println("Patching jaspr_router ^0.9.0 for 0.22.4...")
-                patchedContent = patchedContent.replace("jaspr_router: ^0.9.0", "jaspr_router: 0.8.1")
-            }
-        }
-
-        // Downgrade build_web_compilers to ^4.8.5 to avoid analyzer >=13.3.0 conflict
-        // with jaspr_builder's analyzer constraints (^10 for 0.22.4, ^12 for 0.23.x).
-        if (patchedContent.contains("build_web_compilers: ^4.8.10")) {
-            println("Patching build_web_compilers for $version...")
-            patchedContent = patchedContent.replace("build_web_compilers: ^4.8.10", "build_web_compilers: ^4.8.5")
-        }
-
-        if (patchedContent != originalContent) {
-            pubspecFile.writeText(patchedContent)
-        }
+        patchPubspecForCompatibility(pubspecFile, version)
 
         // Run pub get manually
         println("Running pub get for $projectName...")
@@ -81,13 +65,14 @@ class JasprVersionComparisonTest : JasprIntegrationTestCase() {
         // 2. Test Daemon Execution (>= 0.23 only)
         // 0.22.4 daemon depends on build_daemon port file that fails under modern
         // build_web_compilers. CLI 0.22.4 + current SDK combo is unsupported.
-        val isAtLeast023 = version.startsWith("0.23")
+        val isAtLeast023 = JasprTooling().isVersionAtLeast(version, "0.23.0")
         var serverUri: String? = null
 
         if (isAtLeast023) {
+            assertVmServicePortFree()
             val latch = CountDownLatch(1)
             val options = JasprRunConfigurationOptions().apply { verbose = true }
-            val handler = runDaemon(projectDir, options) { uri ->
+            val handler = runDaemon(projectDir, options, cliVersion = version) { uri ->
                 serverUri = uri
                 latch.countDown()
             }
@@ -104,6 +89,8 @@ class JasprVersionComparisonTest : JasprIntegrationTestCase() {
             } finally {
                 handler.destroyProcess()
             }
+            assertTrue("daemon did not exit after destroyProcess()", awaitTermination(handler))
+            assertVmServicePortReleased()
         } else {
             println("⊘ Skipping daemon URI assertion for legacy version $version (known incompatible with current SDK)")
         }

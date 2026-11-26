@@ -1,0 +1,15 @@
+<html>
+<body>
+Reports nested <code>css()</code> rules whose selector appends to the parent selector, such as <code>&amp;-active</code>.
+<p>
+    Since Jaspr 0.24, nested <code>css()</code> rules are rendered as native CSS nesting, which has no selector
+    concatenation: <code>css('.button', [css('&amp;-active')])</code> used to produce <code>.button-active</code>
+    and no longer matches it.
+</p>
+<!-- tooltip end -->
+<p>
+    The quick-fix moves the rule out of its parent with the full selector, e.g. <code>css('.button-active')</code>.
+    The inspection only runs when the package depends on Jaspr 0.24 or later.
+</p>
+</body>
+</html>

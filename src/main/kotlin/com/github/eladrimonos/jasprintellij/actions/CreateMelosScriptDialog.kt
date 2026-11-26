@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.actions
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
@@ -24,7 +25,7 @@ class CreateMelosScriptDialog(
     val packageName: String get() = (packageNameCombo.editor.item as? String)?.trim().orEmpty()
 
     init {
-        title = "Create Melos Script"
+        title = JasprBundle.message("jaspr.dialog.melos.title")
         init()
     }
 
@@ -39,8 +40,8 @@ class CreateMelosScriptDialog(
     override fun getPreferredFocusedComponent(): JComponent = scriptNameField
 
     override fun doValidate(): ValidationInfo? {
-        if (scriptName.isBlank()) return ValidationInfo("Script name is required.", scriptNameField)
-        if (packageName.isBlank()) return ValidationInfo("Target package is required.", packageNameCombo)
+        if (scriptName.isBlank()) return ValidationInfo(JasprBundle.message("jaspr.dialog.melos.script.required"), scriptNameField)
+        if (packageName.isBlank()) return ValidationInfo(JasprBundle.message("jaspr.dialog.melos.package.required"), packageNameCombo)
         return null
     }
 }

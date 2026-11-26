@@ -13,6 +13,14 @@ class JasprBuilderConsoleFoldingTest : BasePlatformTestCase() {
         assertFalse(folding.shouldFoldLine(project, "Regular output"))
     }
 
+    fun testGetPlaceholderText_024BuildSummary() {
+        val lines = listOf(
+            "[BUILDER] Starting initial build...",
+            "[BUILDER] Built with build_runner/aot in 21s; wrote 2075 outputs.",
+        )
+        assertEquals("[BUILDER] ··· 2 lines — built in 21s", folding.getPlaceholderText(project, lines))
+    }
+
     fun testGetPlaceholderText_WithDuration() {
         val lines = listOf(
             "[BUILDER] Compiling...",

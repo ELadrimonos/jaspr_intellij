@@ -35,11 +35,8 @@ class JasprMelosIntegrationTest : JasprIntegrationTestCase() {
         createProject(memberDir, JasprProjectCreator.Options(mode = "static", runPubGet = false))
         assertBasicProjectStructure(memberDir, "website")
 
-        // Same build_web_compilers/analyzer conflict workaround as JasprVersionComparisonTest.
         val memberPubspec = File(memberDir, "pubspec.yaml")
-        memberPubspec.writeText(
-            memberPubspec.readText().replace("build_web_compilers: ^4.8.10", "build_web_compilers: ^4.8.5")
-        )
+        patchPubspecForCompatibility(memberPubspec, DEFAULT_CLI_VERSION)
         // Opt this member into the workspace, as `dart pub` requires.
         memberPubspec.appendText("\nresolution: workspace\n")
 
@@ -66,13 +63,18 @@ class JasprMelosIntegrationTest : JasprIntegrationTestCase() {
 
         // 2. Injection: write the delimited script block into the root pubspec.yaml.
         val scriptName = "serve_jaspr_test"
-        MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, "website")
+        // The form the plugin generates for Melos >= 7.8.0 (`run:` + `stdio: inherit`),
+        // so daemon.shutdown reaches the daemon through melos.
+        val relativeDir = MelosWorkspaceDetector.resolveMemberPackageRelativeDir(info, "website")
+        assertEquals("packages/website", relativeDir)
+        MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, "website", relativeDir)
+        assertTrue(MelosScriptInjector.usesInheritedStdio(info.melosConfigFile, scriptName))
         val rootPubspecText = info.melosConfigFile.readText()
         assertTrue(rootPubspecText.contains(MelosScriptInjector.MARKER_START))
         assertTrue(rootPubspecText.contains("$scriptName:"))
 
         // Re-running the injection must be a no-op (idempotency), matching subtask 2 of the issue.
-        val secondResult = MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, "website")
+        val secondResult = MelosScriptInjector.ensureScript(info.melosConfigFile, scriptName, "website", relativeDir)
         assertFalse(
             "Second injection with identical arguments should not modify the file",
             (secondResult as MelosScriptInjector.InjectionResult.Written).changed
@@ -92,6 +94,7 @@ class JasprMelosIntegrationTest : JasprIntegrationTestCase() {
             .withWorkDirectory(workspaceRoot)
             .withCharset(StandardCharsets.UTF_8)
 
+        assertVmServicePortFree()
         val latch = CountDownLatch(1)
         var serverUri: String? = null
         val handler = JasprDaemonProcessHandler(melosRunCmd, onServerStarted = { uri ->
@@ -107,5 +110,7 @@ class JasprMelosIntegrationTest : JasprIntegrationTestCase() {
         } finally {
             handler.destroyProcess()
         }
+        assertTrue("melos run did not exit after destroyProcess()", awaitTermination(handler))
+        assertVmServicePortReleased()
     }
 }

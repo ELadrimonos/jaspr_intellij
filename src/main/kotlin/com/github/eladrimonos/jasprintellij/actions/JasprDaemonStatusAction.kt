@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.actions
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
 import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.intellij.notification.NotificationGroupManager
@@ -14,17 +15,21 @@ class JasprDaemonStatusAction : AnAction() {
 
         val statusText = if (daemonService.isAlive) {
             if (daemonService.cliVersion != null && daemonService.daemonPid == null) {
-                "Jaspr Tooling is <b>ACTIVE</b> (CLI Version: ${daemonService.cliVersion}, Mode: File-system scopes)"
+                JasprBundle.message("jaspr.status.active", daemonService.cliVersion!!)
             } else {
-                "Jaspr Tooling Daemon is <b>RUNNING</b> (PID: ${daemonService.daemonPid ?: "Unknown"}, Version: ${daemonService.daemonVersion ?: "Unknown"})"
+                JasprBundle.message(
+                    "jaspr.status.running",
+                    daemonService.daemonPid?.toString() ?: JasprBundle.message("jaspr.unknown"),
+                    daemonService.daemonVersion ?: JasprBundle.message("jaspr.unknown"),
+                )
             }
         } else {
-            "Jaspr Tooling is <b>STOPPED</b>."
+            JasprBundle.message("jaspr.status.stopped")
         }
 
         NotificationGroupManager.getInstance()
             .getNotificationGroup("JasprIntelliJ")
-            .createNotification("Jaspr daemon status", statusText, NotificationType.INFORMATION)
+            .createNotification(JasprBundle.message("jaspr.status.title"), statusText, NotificationType.INFORMATION)
             .setIcon(JasprIcons.JasprLogo)
             .notify(project)
     }

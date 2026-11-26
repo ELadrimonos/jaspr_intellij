@@ -38,6 +38,7 @@ class JasprRunConfiguration(
     override fun writeExternal(element: Element) {
         super.writeExternal(element)
 
+        JDOMExternalizerUtil.writeField(element, "packageDir", packageDir)
         JDOMExternalizerUtil.writeField(element, "input", input)
         JDOMExternalizerUtil.writeField(element, "mode", mode)
         JDOMExternalizerUtil.writeField(element, "port", port)
@@ -53,6 +54,7 @@ class JasprRunConfiguration(
         JDOMExternalizerUtil.writeField(element, "verbose", verbose.toString())
         JDOMExternalizerUtil.writeField(element, "experimentalWasm", experimentalWasm.toString())
         JDOMExternalizerUtil.writeField(element, "skipServer", skipServer.toString())
+        JDOMExternalizerUtil.writeField(element, "openDevTools", openDevTools.toString())
         JDOMExternalizerUtil.writeField(element, "managedBuildOptions", managedBuildOptions.toString())
     }
 
@@ -62,6 +64,7 @@ class JasprRunConfiguration(
     override fun readExternal(element: Element) {
         super.readExternal(element)
 
+        packageDir = JDOMExternalizerUtil.readField(element, "packageDir") ?: ""
         input = JDOMExternalizerUtil.readField(element, "input") ?: ""
         mode = JDOMExternalizerUtil.readField(element, "mode") ?: "refresh"
         port = JDOMExternalizerUtil.readField(element, "port") ?: "8080"
@@ -77,6 +80,7 @@ class JasprRunConfiguration(
         verbose = JDOMExternalizerUtil.readField(element, "verbose")?.toBoolean() ?: false
         experimentalWasm = JDOMExternalizerUtil.readField(element, "experimentalWasm")?.toBoolean() ?: false
         skipServer = JDOMExternalizerUtil.readField(element, "skipServer")?.toBoolean() ?: false
+        openDevTools = JDOMExternalizerUtil.readField(element, "openDevTools")?.toBoolean() ?: false
 
         // managedBuildOptions defaults to true
         managedBuildOptions = JDOMExternalizerUtil.readField(element, "managedBuildOptions")?.toBoolean() ?: true
@@ -89,6 +93,10 @@ class JasprRunConfiguration(
         JasprRunProfileState(environment, options)
 
     // region Convenience accessors (delegate to options)
+
+    var packageDir: String
+        get() = options.packageDir
+        set(v) { options.packageDir = v }
 
     var input: String
         get() = options.input
@@ -125,6 +133,10 @@ class JasprRunConfiguration(
     var skipServer: Boolean
         get() = options.skipServer
         set(v) { options.skipServer = v }
+
+    var openDevTools: Boolean
+        get() = options.openDevTools
+        set(v) { options.openDevTools = v }
 
     var managedBuildOptions: Boolean
         get() = options.managedBuildOptions

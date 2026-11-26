@@ -10,13 +10,25 @@ import com.intellij.execution.configurations.RunConfigurationOptions
  */
 class JasprRunConfigurationOptions : RunConfigurationOptions() {
 
+    /**
+     * Directory of the Jaspr package to serve, relative to the project root; empty means the
+     * project's first Jaspr package. Used as the daemon's cwd when no [melosScript] is set.
+     */
+    var packageDir: String
+        get() = _packageDir ?: ""
+        set(v) { _packageDir = v.ifEmpty { null } }
+    private var _packageDir by string("")
+
     /** The main entry point file for the Jaspr application. Corresponds to `--input`. */
     var input: String
         get() = _input ?: ""
         set(v) { _input = v.ifEmpty { null } }
     private var _input by string("")
 
-    /** The reload mode for the application. Can be "reload" or "refresh". Corresponds to `--mode`. */
+    /**
+     * Action performed after each rebuild: "refresh", "reload", "restart" or "none".
+     * Corresponds to `--auto` on jaspr_cli >= 0.24.0, and to `--mode` (reload/refresh only) before that.
+     */
     var mode: String
         get() = _mode ?: "refresh"
         set(v) { _mode = v.ifEmpty { null } }
@@ -28,13 +40,13 @@ class JasprRunConfigurationOptions : RunConfigurationOptions() {
         set(v) { _port = v.ifEmpty { null } }
     private var _port by string("")
 
-    /** The port to run the web server on. Corresponds to `--web-port`. */
+    /** The port to run the web server on. Corresponds to `--web-port` (removed in jaspr_cli 0.24.0). */
     var webPort: String
         get() = _webPort ?: ""
         set(v) { _webPort = v.ifEmpty { null } }
     private var _webPort by string("")
 
-    /** The port to run the proxy server on. Corresponds to `--proxy-port`. */
+    /** The port to run the proxy server on. Corresponds to `--proxy-port` (removed in jaspr_cli 0.24.0). */
     var proxyPort: String
         get() = _proxyPort ?: ""
         set(v) { _proxyPort = v.ifEmpty { null } }
@@ -53,6 +65,13 @@ class JasprRunConfigurationOptions : RunConfigurationOptions() {
     /** Enables experimental WASM compilation. Corresponds to `--experimental-wasm`. */
     private val _experimentalWasm = property(false).provideDelegate(this, ::experimentalWasm)
     var experimentalWasm: Boolean by _experimentalWasm
+
+    /**
+     * Opens Dart DevTools in the browser when a Debug session attaches to the server VM.
+     * Off by default: the IDE debugger is already attached, and the URL is printed to the console.
+     */
+    private val _openDevTools = property(false).provideDelegate(this, ::openDevTools)
+    var openDevTools: Boolean by _openDevTools
 
     /** Skips running the server. Corresponds to `--skip-server`. */
     private val _skipServer = property(false).provideDelegate(this, ::skipServer)

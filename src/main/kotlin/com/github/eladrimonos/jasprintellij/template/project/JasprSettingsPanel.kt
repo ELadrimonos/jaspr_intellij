@@ -51,6 +51,7 @@ class JasprSettingsPanel(private val project: Project? = null) {
     var flutter: String = "none"
     var backend: String = "none"
     var runPubGet: Boolean = true
+    var installSkills: Boolean = false
 
     // ── Direct component references (used by toCreatorOptions in WebStorm) ───
 
@@ -67,6 +68,7 @@ class JasprSettingsPanel(private val project: Project? = null) {
     private var flutterCombo: JComboBox<String>? = null
     private var backendCombo: JComboBox<String>? = null
     private var runPubGetCheckBox: JCheckBox? = null
+    private var installSkillsCheckBox: JCheckBox? = null
 
     /**
      * Always returns the live text from the SDK field, regardless of whether
@@ -225,6 +227,12 @@ class JasprSettingsPanel(private val project: Project? = null) {
                     .bindSelected(::runPubGet)
                     .component
             }
+
+            row {
+                installSkillsCheckBox = checkBox("Install Jaspr AI skills for your agent (jaspr 0.24+)")
+                    .bindSelected(::installSkills)
+                    .component
+            }
         }
     }
 
@@ -270,6 +278,8 @@ class JasprSettingsPanel(private val project: Project? = null) {
 
         val resolvedRunPubGet = runPubGetCheckBox?.isSelected ?: runPubGet
 
+        val resolvedInstallSkills = installSkillsCheckBox?.isSelected ?: installSkills
+
         return com.github.eladrimonos.jasprintellij.services.JasprProjectCreator.Options(
             template = resolvedTemplate,
             mode = resolvedMode,
@@ -277,6 +287,7 @@ class JasprSettingsPanel(private val project: Project? = null) {
             flutter = resolvedFlutter,
             backend = resolvedBackend,
             runPubGet = resolvedRunPubGet,
+            installSkills = resolvedInstallSkills,
         )
     }
 

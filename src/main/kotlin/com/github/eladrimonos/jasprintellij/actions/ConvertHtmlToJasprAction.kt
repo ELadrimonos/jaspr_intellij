@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.actions
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.services.JasprTooling
 import com.github.eladrimonos.jasprintellij.services.JasprToolingDaemonService
 import com.intellij.notification.NotificationGroupManager
@@ -17,6 +18,7 @@ import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 
@@ -43,8 +45,8 @@ class ConvertHtmlToJasprAction : AnAction() {
 
         val outputDir = Messages.showInputDialog(
             project,
-            "Enter output directory (relative to project root):",
-            "Convert HTML to Jaspr",
+            JasprBundle.message("jaspr.convert.dialog.message"),
+            JasprBundle.message("jaspr.convert.dialog.title"),
             null,
             "lib/components",
             null
@@ -52,20 +54,20 @@ class ConvertHtmlToJasprAction : AnAction() {
 
         logger.info("ConvertHtmlToJaspr: triggered for file=${file.path}, outputDir=$outputDir")
 
-        ProgressManager.getInstance().run(object : Task.Backgroundable(project, "Converting HTML to Jaspr…", false) {
+        ProgressManager.getInstance().run(object : Task.Backgroundable(project, JasprBundle.message("jaspr.convert.progress"), false) {
             override fun run(indicator: ProgressIndicator) {
                 val daemon = project.getService(JasprToolingDaemonService::class.java)
                 logger.info("ConvertHtmlToJaspr: daemon=$daemon, isAlive=${daemon?.isAlive}")
 
                 if (daemon == null || !daemon.isAlive) {
                     logger.warn("ConvertHtmlToJaspr: Jaspr tooling is not active")
-                    notifyError(project, "Jaspr tooling is not active. Check that jaspr_cli is installed and the project is initialized.")
+                    notifyError(project, JasprBundle.message("jaspr.convert.error.inactive"))
                     return
                 }
 
                 val html = readFile(file) ?: run {
                     logger.warn("ConvertHtmlToJaspr: could not read file=${file.path}")
-                    notifyError(project, "Could not read ${file.name}.")
+                    notifyError(project, JasprBundle.message("jaspr.convert.error.read", file.name))
                     return
                 }
 
@@ -73,11 +75,11 @@ class ConvertHtmlToJasprAction : AnAction() {
                 val htmlToConvert = extractBodyContent(html)
                 logger.info("ConvertHtmlToJaspr: sending to daemon, length=${htmlToConvert.length}, preview=${htmlToConvert.take(200)}")
 
-                val dartCode = daemon.convertHtml(htmlToConvert, file.path)
+                val dartCode = daemon.convertHtml(htmlToConvert)
                 logger.info("ConvertHtmlToJaspr: dartCode=${dartCode?.take(300) ?: "NULL"}")
 
-                if (dartCode == null) {
-                    notifyError(project, "Conversion failed. Check that jaspr_cli >= 0.21.2 is installed.")
+                if (dartCode.isNullOrBlank()) {
+                    notifyError(project, JasprBundle.message("jaspr.convert.error.failed"))
                     return
                 }
 
@@ -88,17 +90,15 @@ class ConvertHtmlToJasprAction : AnAction() {
         })
     }
 
-    private fun extractBodyContent(html: String): String {
+    /** The contents of `<body>` (or the whole file minus the doctype if there's no body). */
+    internal fun extractBodyContent(html: String): String {
         val bodyRegex = Regex("""<body[^>]*>(.*?)</body>""", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
         val bodyMatch = bodyRegex.find(html)
-        val content = if (bodyMatch != null) {
+        return if (bodyMatch != null) {
             bodyMatch.groupValues[1].trim()
         } else {
             html.replace(Regex("""<!DOCTYPE[^>]*>""", RegexOption.IGNORE_CASE), "").trim()
         }
-
-        // Wrap in a single root so the daemon's parseFragment.firstChild gets everything
-        return "<div>$content</div>"
     }
 
     private fun readFile(file: VirtualFile): String? = try {
@@ -118,13 +118,18 @@ class ConvertHtmlToJasprAction : AnAction() {
     private fun createAndOpenDartFile(project: Project, sourceFile: VirtualFile, dartCode: String, outputDirPath: String) {
         ApplicationManager.getApplication().runWriteAction {
             try {
-                val projectDir = project.guessProjectDir() ?: run {
-                    notifyError(project, "Could not find project directory.")
-                    return@runWriteAction
-                }
+                // Relative to the Jaspr package, which in a workspace/Melos monorepo
+                // is a member package rather than the opened root.
+                val projectDir = JasprTooling.findJasprProjectDir(project)
+                    ?.let { LocalFileSystem.getInstance().refreshAndFindFileByIoFile(it) }
+                    ?: project.guessProjectDir()
+                    ?: run {
+                        notifyError(project, JasprBundle.message("jaspr.convert.error.project.dir"))
+                        return@runWriteAction
+                    }
 
                 val parent = VfsUtil.createDirectoryIfMissing(projectDir, outputDirPath) ?: run {
-                    notifyError(project, "Could not create or find directory: $outputDirPath")
+                    notifyError(project, JasprBundle.message("jaspr.convert.error.output.dir", outputDirPath))
                     return@runWriteAction
                 }
 
@@ -145,7 +150,7 @@ class ConvertHtmlToJasprAction : AnAction() {
                 VfsUtil.saveText(dartFile, wrapInComponent(project, dartCode, componentName))
                 FileEditorManager.getInstance(project).openFile(dartFile, true)
             } catch (e: Exception) {
-                notifyError(project, "Could not create Dart file: ${e.message}")
+                notifyError(project, JasprBundle.message("jaspr.convert.error.create", e.message ?: ""))
             }
         }
     }

@@ -14,7 +14,8 @@ class MelosScriptInjectorDocumentSyncTest : BasePlatformTestCase() {
 
     fun testEditingAnAlreadyOpenDocumentUpdatesItImmediately() {
         val basePath = project.basePath ?: error("Test project has no base path")
-        val ioFile = File(basePath, "pubspec.yaml")
+        // The light test project's base dir only exists if an earlier test created it.
+        val ioFile = File(basePath, "pubspec.yaml").also { it.parentFile.mkdirs() }
         ioFile.writeText("name: my_workspace\n")
 
         val vFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(ioFile)

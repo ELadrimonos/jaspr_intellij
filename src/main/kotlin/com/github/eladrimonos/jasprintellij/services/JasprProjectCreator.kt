@@ -29,10 +29,19 @@ class JasprProjectCreator(
         val flutter: String = "none",
         val backend: String = "none",
         val runPubGet: Boolean = true,
+        /** Install Jaspr AI skills (`--[no-]skills`, jaspr_cli >= 0.24.0). */
+        val installSkills: Boolean = false,
     )
 
+    companion object {
+        const val SKILLS_FLAG_VERSION = "0.24.0"
+    }
+
+    /** jaspr_cli version read by [preflightCheck], reused by [create]. */
+    private var cliVersion: String? = null
+
     fun preflightCheck(sdkPath: String) {
-        tooling.preflightCheck(sdkPath)
+        cliVersion = tooling.preflightCheck(sdkPath)
     }
 
     fun create(projectDir: File, sdkPath: String, options: Options) {
@@ -66,6 +75,12 @@ class JasprProjectCreator(
                 commandLine.addParameters("-b", effectiveBackend)
             }
             if (!options.runPubGet) commandLine.addParameter("--no-pub-get")
+            // Without a terminal, jaspr_cli >= 0.24 answers its "install skills?" prompt
+            // with the default (yes), so always pass the choice explicitly.
+            val version = cliVersion ?: tooling.readJasprCliVersion(sdkPath)
+            if (tooling.isVersionAtLeast(version, SKILLS_FLAG_VERSION)) {
+                commandLine.addParameter(if (options.installSkills) "--skills" else "--no-skills")
+            }
 
             commandLine.addParameter(tempProjectName)
 

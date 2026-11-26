@@ -9,6 +9,7 @@ import com.intellij.openapi.util.SystemInfo
 import com.intellij.util.EnvironmentUtil
 import java.io.File
 import java.nio.charset.StandardCharsets
+import org.yaml.snakeyaml.Yaml
 
 class JasprCliMissingException(message: String) : ConfigurationException(message)
 
@@ -18,6 +19,8 @@ class JasprTooling(
     private val logger: Logger = Logger.getInstance(JasprTooling::class.java),
 ) {
     companion object {
+        const val MAX_LOCKFILE_SEARCH_LEVELS = 5
+
         fun isJasprProject(project: Project): Boolean = findJasprProjectDir(project) != null
 
         /**
@@ -34,10 +37,25 @@ class JasprTooling(
 
             // Root pubspec.yaml (or melos.yaml) may be a bare workspace manifest with no
             // jaspr dependency of its own — check member packages before giving up.
-            val workspaceInfo = MelosWorkspaceDetector.detect(projectDir) ?: return null
-            return workspaceInfo.memberPackagePaths
-                .map { relativePath -> File(workspaceInfo.workspaceRoot, relativePath) }
-                .firstOrNull { memberDir -> pubspecMentionsJaspr(File(memberDir, "pubspec.yaml")) }
+            return findJasprProjectDirs(project).firstOrNull()
+        }
+
+        /**
+         * Every Jaspr package of the project: the opened root if it depends on jaspr, plus
+         * each workspace/Melos member that does. Each app writes its own `scopes.json`.
+         */
+        fun findJasprProjectDirs(project: Project): List<File> =
+            project.basePath?.let { findJasprProjectDirs(File(it)) }.orEmpty()
+
+        internal fun findJasprProjectDirs(projectDir: File): List<File> {
+            val dirs = LinkedHashSet<File>()
+            if (pubspecMentionsJaspr(File(projectDir, "pubspec.yaml"))) dirs += projectDir.absoluteFile
+            MelosWorkspaceDetector.detect(projectDir)?.let { info ->
+                info.memberPackagePaths
+                    .map { relativePath -> File(info.workspaceRoot, relativePath).absoluteFile }
+                    .filterTo(dirs) { memberDir -> pubspecMentionsJaspr(File(memberDir, "pubspec.yaml")) }
+            }
+            return dirs.toList()
         }
 
         // Matches an actual `jaspr:` dependency declaration line (e.g. "  jaspr: ^0.23.4"),
@@ -49,11 +67,14 @@ class JasprTooling(
         private fun pubspecMentionsJaspr(pubspec: File): Boolean {
             if (!pubspec.exists()) return false
             return try {
-                JASPR_DEPENDENCY_REGEX.containsMatchIn(pubspec.readText())
+                declaresJasprDependency(pubspec.readText())
             } catch (e: Exception) {
                 false
             }
         }
+
+        /** Whether pubspec.yaml [text] declares a `jaspr` dependency. */
+        fun declaresJasprDependency(text: String): Boolean = JASPR_DEPENDENCY_REGEX.containsMatchIn(text)
     }
 
     private fun dartExecutable(sdkPath: String): String {
@@ -61,10 +82,15 @@ class JasprTooling(
         return File(sdkPath, "bin/$dartExeName").absolutePath
     }
 
-    fun preflightCheck(sdkPath: String) {
+    /**
+     * Verifies that Dart and jaspr_cli can be run, throwing a descriptive
+     * [ConfigurationException] otherwise. Returns the installed jaspr_cli version
+     * (as [readJasprCliVersion] would) so callers don't spawn `jaspr --version` again.
+     */
+    fun preflightCheck(sdkPath: String): String? {
         val dartExe = dartExecutable(sdkPath)
 
-        fun runOrThrow(vararg args: String, hint: String, isCliCheck: Boolean = false) {
+        fun runOrThrow(vararg args: String, hint: String, isCliCheck: Boolean = false): ProcessOutput {
             val cmd = GeneralCommandLine()
                 .withExePath(dartExe)
                 .withParameters(*args)
@@ -86,16 +112,18 @@ class JasprTooling(
                     throw ConfigurationException(message)
                 }
             }
+            return out
         }
 
         runOrThrow("--version", hint = "Failed to run Dart. Verify that the selected SDK path is valid.")
 
-        runOrThrow(
+        val cliOut = runOrThrow(
             "pub", "global", "run", "jaspr_cli:jaspr", "--version",
             hint = "Could not find jaspr_cli via 'dart pub global run'. " +
                     "Install it with: dart pub global activate jaspr_cli (network access is required the first time).",
             isCliCheck = true
         )
+        return extractSemver(cliOut.stdout.ifBlank { cliOut.stderr })
     }
 
     fun readJasprCliVersion(sdkPath: String): String? {
@@ -121,23 +149,92 @@ class JasprTooling(
         return extractSemver(text)
     }
 
+    /** Version of the globally activated melos (`dart pub global run melos --version`), or null. */
+    fun readMelosVersion(sdkPath: String): String? {
+        val cmd = GeneralCommandLine()
+            .withExePath(dartExecutable(sdkPath))
+            .withParameters("pub", "global", "run", "melos", "--version")
+            .withCharset(StandardCharsets.UTF_8)
+            .withEnvironment(environmentProvider())
+        val out = cliRunner.run(cmd)
+        if (out.exitCode != 0) return null
+        return extractSemver(out.stdout.ifBlank { out.stderr })
+    }
+
     fun readFrameworkVersionFromPubspec(projectDir: File): String? {
         val pubspec = File(projectDir, "pubspec.yaml")
         if (!pubspec.exists()) return null
 
         return try {
-            val text = pubspec.readText(StandardCharsets.UTF_8)
-
-            val regex = Regex("""(?m)^\s*jaspr\s*:\s*(.+?)\s*$""")
-            val match = regex.find(text) ?: return null
-            val rawSpec = match.groupValues.getOrNull(1)?.trim()
-            if (rawSpec.isNullOrBlank()) return null
-
-            normalizeJasprSpec(rawSpec)
+            parseFrameworkVersionFromPubspec(pubspec.readText(StandardCharsets.UTF_8))
         } catch (e: Exception) {
             logger.warn("Could not read pubspec.yaml for framework version: ${e.message}")
             null
         }
+    }
+
+    /** The version from the `jaspr:` dependency constraint in pubspec.yaml [text], or null. */
+    fun parseFrameworkVersionFromPubspec(text: String): String? {
+        val regex = Regex("""(?m)^\s*jaspr\s*:\s*(.+?)\s*$""")
+        val match = regex.find(text) ?: return null
+        val rawSpec = match.groupValues.getOrNull(1)?.trim()
+        if (rawSpec.isNullOrBlank()) return null
+
+        return normalizeJasprSpec(rawSpec)
+    }
+
+    /**
+     * Reads the version of the `jaspr` package actually resolved by pub, from `pubspec.lock`.
+     * Looks in [projectDir] first and then walks up the parent directories, since a pub
+     * workspace keeps a single lockfile at the workspace root rather than in each member.
+     */
+    fun readResolvedFrameworkVersion(projectDir: File): String? {
+        var dir: File? = projectDir.absoluteFile
+        var levels = 0
+        while (dir != null && levels <= MAX_LOCKFILE_SEARCH_LEVELS) {
+            val lockfile = File(dir, "pubspec.lock")
+            if (lockfile.isFile) return readJasprVersionFromLockfile(lockfile)
+            dir = dir.parentFile
+            levels++
+        }
+        return null
+    }
+
+    private fun readJasprVersionFromLockfile(lockfile: File): String? {
+        return try {
+            parseJasprVersionFromLockfile(lockfile.readText(StandardCharsets.UTF_8))
+        } catch (e: Exception) {
+            logger.warn("Could not read pubspec.lock for framework version: ${e.message}")
+            null
+        }
+    }
+
+    /** The resolved `jaspr` package version in pubspec.lock [text], or null. Throws on malformed YAML. */
+    fun parseJasprVersionFromLockfile(text: String): String? {
+        val root = Yaml().load<Any?>(text) as? Map<*, *> ?: return null
+        val packages = root["packages"] as? Map<*, *> ?: return null
+        val jaspr = packages["jaspr"] as? Map<*, *> ?: return null
+        val version = jaspr["version"]?.toString() ?: return null
+        return extractSemver(version)
+    }
+
+    /**
+     * Whether the installed jaspr_cli and the project's jaspr version are far enough apart
+     * to warn about. Only major.minor is compared: patch releases are compatible, and a
+     * pubspec constraint like `^0.23.0` legitimately resolves to a newer patch.
+     */
+    fun isVersionMismatch(cliVersion: String, frameworkVersion: String): Boolean {
+        val cli = majorMinor(cliVersion) ?: return false
+        val framework = majorMinor(frameworkVersion) ?: return false
+        return cli != framework
+    }
+
+    private fun majorMinor(version: String): Pair<Int, Int>? {
+        val semver = extractSemver(version) ?: return null
+        val parts = semver.split(".")
+        val major = parts.getOrNull(0)?.toIntOrNull() ?: return null
+        val minor = parts.getOrNull(1)?.toIntOrNull() ?: return null
+        return major to minor
     }
 
     private fun normalizeJasprSpec(spec: String): String? {

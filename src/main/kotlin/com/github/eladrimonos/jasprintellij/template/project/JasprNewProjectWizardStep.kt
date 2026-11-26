@@ -1,5 +1,6 @@
 package com.github.eladrimonos.jasprintellij.template.project
 
+import com.github.eladrimonos.jasprintellij.JasprBundle
 import com.github.eladrimonos.jasprintellij.actions.JasprUpdateCliAction
 import com.github.eladrimonos.jasprintellij.execution.runconfig.JasprRunConfigurationSetup
 import com.github.eladrimonos.jasprintellij.icons.JasprIcons
@@ -87,13 +88,13 @@ class JasprNewProjectWizardStep(parent: NewProjectWizardStep) : AbstractNewProje
                             val notification = NotificationGroupManager.getInstance()
                                 .getNotificationGroup("JasprIntelliJ")
                                 .createNotification(
-                                    "Jaspr Tooling Error",
-                                    "Preflight check failed: ${e.localizedMessage?.substringBefore("\n") ?: "Unknown error"}",
+                                    JasprBundle.message("jaspr.notification.preflight.title"),
+                                    JasprBundle.message("jaspr.notification.preflight.content", e.localizedMessage?.substringBefore("\n") ?: JasprBundle.message("jaspr.unknown.error")),
                                     NotificationType.ERROR
                                 )
                                 .setIcon(JasprIcons.JasprLogo)
 
-                            notification.addAction(NotificationAction.create("Install jaspr_cli") { _, notification ->
+                            notification.addAction(NotificationAction.create(JasprBundle.message("jaspr.notification.preflight.install")) { _, notification ->
                                 JasprUpdateCliAction().runAction(project) {
                                     // Optionally start daemon here too if needed, though usually new project 
                                     // creation will trigger its own start later.
